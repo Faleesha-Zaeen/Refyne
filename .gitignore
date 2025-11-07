@@ -1,0 +1,27 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs
+dist/
+build/
+.out/
+
+# Environment
+.env
+*.env.local
+server/.env
+server/.env.*
+
+# Uploads and temp artifacts
+server/uploads/tmp/
+!server/uploads/tmp/.gitkeep
+server/uploads/*.zip
+server/uploads/*.tmp
+
+# IDE
+.vscode/
+.idea/
+*.sw?

@@ -1,6 +1,6 @@
-# Refyne 2.0 – The Evolving AI Engineer
+# Refyne – The Evolving AI Engineer
 
-Refyne 2.0 analyzes complete codebases to uncover architectural bottlenecks, summarize structural patterns, and prepare focused refactor suggestions powered by Gemini.
+Refyne analyzes complete codebases to uncover architectural bottlenecks, summarize structural patterns, and prepare focused refactor suggestions powered by Gemini.
 
 ## Project Structure
 

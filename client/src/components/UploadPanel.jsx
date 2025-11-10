@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import React from "react";
 
 const UploadPanel = ({ onUpload, uploading, scan, analysis, error }) => {
   const [file, setFile] = useState(null);

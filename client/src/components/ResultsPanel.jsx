@@ -1,257 +1,191 @@
-const CODE_BLOCK_REGEX = /```(?:json)?\s*([\s\S]*?)```/i;
-
-const stripCodeFences = (value) => {
-  if (typeof value !== 'string') {
-    return value;
-  }
-  return value.replace(/```[\s\S]*?```/g, '').trim();
-};
-
-const tryExtractJson = (input) => {
-  if (typeof input !== 'string') {
-    return null;
-  }
-
-  const trimmed = input.trim();
-  const codeBlockMatch = trimmed.match(CODE_BLOCK_REGEX);
-  const candidate = codeBlockMatch && codeBlockMatch[1] ? codeBlockMatch[1].trim() : trimmed;
-
-  if (candidate.startsWith('{') || candidate.startsWith('[')) {
-    try {
-      return JSON.parse(candidate);
-    } catch (err) {
-      console.warn('[Refyne] Failed to parse Gemini JSON candidate:', err);
-    }
-  }
-
-  return null;
-};
-
-const normalizeResultPayload = (payload) => {
-  if (!payload) {
-    return null;
-  }
-
-  if (typeof payload === 'string') {
-    return tryExtractJson(payload) ?? payload;
-  }
-
-  if (Array.isArray(payload)) {
-    if (payload.length === 0) {
-      return [];
-    }
-    const first = normalizeResultPayload(payload[0]);
-    return first ?? payload[0];
-  }
-
-  return payload;
-};
-
-const looksLikeRefactorObject = (payload) => {
-  if (!payload || typeof payload !== 'object') {
-    return false;
-  }
-
-  return (
-    Object.prototype.hasOwnProperty.call(payload, 'summary') ||
-    Object.prototype.hasOwnProperty.call(payload, 'issues') ||
-    Object.prototype.hasOwnProperty.call(payload, 'suggestions') ||
-    Object.prototype.hasOwnProperty.call(payload, 'refactoredFiles')
-  );
-};
-
-const extractJsonFragment = (payload) => {
-  if (typeof payload !== 'string') {
-    return null;
-  }
-
-  const searchTargets = ['{', '['];
-  for (const opening of searchTargets) {
-    const closing = opening === '{' ? '}' : ']';
-    const startIndex = payload.indexOf(opening);
-    if (startIndex === -1) {
-      continue;
-    }
-
-    let depth = 0;
-    let inString = false;
-    let escaped = false;
-
-    for (let index = startIndex; index < payload.length; index += 1) {
-      const char = payload[index];
-
-      if (escaped) {
-        escaped = false;
-        continue;
-      }
-
-      if (char === '\\') {
-        escaped = true;
-        continue;
-      }
-
-      if (char === '"') {
-        inString = !inString;
-        continue;
-      }
-
-      if (inString) {
-        continue;
-      }
-
-      if (char === opening) {
-        depth += 1;
-      } else if (char === closing) {
-        depth -= 1;
-        if (depth === 0) {
-          return payload.slice(startIndex, index + 1);
-        }
-      }
-    }
-  }
-
-  return null;
-};
-
-const cleanSummaryText = (text) => {
-  if (typeof text !== 'string') {
-    return text;
-  }
-
-  const withoutFences = stripCodeFences(text);
-  const codeIndex = withoutFences.search(/\b(javascript|import|export|function|class)\b/i);
-  if (codeIndex > 0) {
-    return withoutFences.slice(0, codeIndex).trim();
-  }
-  return withoutFences.trim();
-};
+import React, { useState } from "react";
 
 const ResultsPanel = ({ result }) => {
+  const [expandedFiles, setExpandedFiles] = useState({});
+
   if (!result) {
-    return <div className="text-gray-500 italic">Run a refactor to see AI insights.</div>;
-  }
-
-  let parsedResult = normalizeResultPayload(result);
-
-  if (Array.isArray(parsedResult)) {
-    parsedResult = normalizeResultPayload(parsedResult[0]);
-  }
-
-  if (parsedResult && typeof parsedResult === 'object' && typeof parsedResult.summary === 'string') {
-    const embedded = normalizeResultPayload(parsedResult.summary);
-    if (looksLikeRefactorObject(embedded)) {
-      parsedResult = embedded;
-    }
-  }
-
-  if (
-    parsedResult &&
-    typeof parsedResult === 'object' &&
-    (!Array.isArray(parsedResult.issues) || parsedResult.issues.length === 0) &&
-    typeof parsedResult.summary === 'string'
-  ) {
-    const nestedFragment = extractJsonFragment(parsedResult.summary);
-    if (nestedFragment) {
-      try {
-        const nestedPayload = JSON.parse(nestedFragment);
-        if (looksLikeRefactorObject(nestedPayload)) {
-          parsedResult = nestedPayload;
-        }
-      } catch (err) {
-        console.warn('[Refyne] Failed to parse JSON fragment inside summary:', err);
-      }
-    }
-  }
-
-  if (!parsedResult || typeof parsedResult !== 'object') {
     return (
-      <div className="text-gray-500 italic">
-        Refactor result is not in a recognized format.
+      <div className="results-empty-state">
+        <div className="empty-icon">⚡</div>
+        <h3>Awaiting Analysis</h3>
+        <p>Run a refactor to unlock AI-powered insights and code transformations</p>
+        <div className="empty-features">
+          <div className="feature">
+            <span className="feature-icon">🔍</span>
+            <span>Deep code analysis</span>
+          </div>
+          <div className="feature">
+            <span className="feature-icon">🎯</span>
+            <span>Smart recommendations</span>
+          </div>
+          <div className="feature">
+            <span className="feature-icon">⚡</span>
+            <span>Instant refactoring</span>
+          </div>
+        </div>
       </div>
     );
   }
 
-  if (Array.isArray(parsedResult) && parsedResult.length > 0) {
-    parsedResult = parsedResult[0];
-  }
+  const { summary = "", issues = [], suggestions = [], refactoredFiles = [] } = result;
 
-  const {
-    summary,
-    issues = [],
-    suggestions = [],
-    refactoredFiles = []
-  } = parsedResult;
-
-  const issuesList = Array.isArray(issues) ? issues : [];
-  const suggestionsList = Array.isArray(suggestions) ? suggestions : [];
-  const refactorList = Array.isArray(refactoredFiles) ? refactoredFiles : [];
-
-  const displaySummary = typeof summary === 'string' ? cleanSummaryText(summary) : summary;
+  const toggleFileExpansion = (index) => {
+    setExpandedFiles(prev => ({
+      ...prev,
+      [index]: !prev[index]
+    }));
+  };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm p-6 border text-gray-900">
-      <section className="mb-6">
-        <h3 className="text-xl font-semibold mb-3">🧠 Summary</h3>
-        <p className="text-base leading-relaxed font-medium">
-          {displaySummary || 'No summary available.'}
-        </p>
+    <div className="results-container">
+      {/* Summary Section */}
+      <section className="results-section summary-section">
+        <div className="section-header">
+          <div className="section-icon">🧠</div>
+          <h3 className="section-title">AI Analysis Summary</h3>
+        </div>
+        <div className="summary-card">
+          <div className="summary-content">
+            <p className="summary-text">{summary || "No summary available."}</p>
+          </div>
+          <div className="summary-metrics">
+            <div className="metric-badge">
+              <span className="metric-value">{issues.length}</span>
+              <span className="metric-label">Issues Found</span>
+            </div>
+            <div className="metric-badge">
+              <span className="metric-value">{suggestions.length}</span>
+              <span className="metric-label">Suggestions</span>
+            </div>
+            <div className="metric-badge">
+              <span className="metric-value">{refactoredFiles.length}</span>
+              <span className="metric-label">Files Improved</span>
+            </div>
+          </div>
+        </div>
       </section>
 
-      <section className="mb-6">
-        <h3 className="text-xl font-semibold mb-3">🚨 Issues Detected</h3>
-        {issuesList.length ? (
-          <ul className="list-disc list-inside space-y-2 text-sm text-gray-800">
-            {issuesList.map((issue, index) => (
-              <li key={`${issue}-${index}`}>{issue}</li>
-            ))}
-          </ul>
-        ) : (
-          <div className="text-sm text-gray-500">No issues found.</div>
-        )}
-      </section>
-
-      <section className="mb-6">
-        <h3 className="text-xl font-semibold mb-3">💡 Recommendations</h3>
-        {suggestionsList.length ? (
-          <ul className="list-disc list-inside space-y-2 text-sm text-gray-800">
-            {suggestionsList.map((suggestion, index) => (
-              <li key={`${suggestion}-${index}`}>{suggestion}</li>
-            ))}
-          </ul>
-        ) : (
-          <div className="text-sm text-gray-500">No recommendations.</div>
-        )}
-      </section>
-
-      <section className="mb-0">
-        <h3 className="text-xl font-semibold mb-4">📄 Refactored Files</h3>
-        {refactorList.length ? (
-          <div className="space-y-4">
-            {refactorList.map((file, index) => (
-              <div
-                key={`${file.filename || 'file'}-${index}`}
-                className="bg-gray-50 border rounded-xl p-4 shadow-sm"
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <span className="font-semibold text-sm text-gray-900">
-                    {file.filename || 'Unnamed file'}
-                  </span>
-                </div>
-                <div className="flex flex-col md:flex-row gap-3">
-                  <div className="flex-1">
-                    <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Before</h4>
-                    <pre className="font-mono text-sm bg-gray-900 text-green-100 p-3 rounded-lg overflow-x-auto w-full">{file.before || '// Original code not provided.'}</pre>
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">After</h4>
-                    <pre className="font-mono text-sm bg-gray-900 text-green-100 p-3 rounded-lg overflow-x-auto w-full">{file.after || '// Refactored code not provided.'}</pre>
+      <div className="results-grid">
+        {/* Issues Section */}
+        <section className="results-section issues-section">
+          <div className="section-header">
+            <div className="section-icon">🚨</div>
+            <h3 className="section-title">Issues Detected</h3>
+            {issues.length > 0 && (
+              <span className="issue-count">{issues.length} found</span>
+            )}
+          </div>
+          {issues.length ? (
+            <div className="issues-list">
+              {issues.map((issue, index) => (
+                <div key={index} className="issue-item">
+                  <div className="issue-severity"></div>
+                  <div className="issue-content">
+                    <span className="issue-text">{issue}</span>
+                    <button className="quick-fix-btn">Show fix</button>
                   </div>
                 </div>
+              ))}
+            </div>
+          ) : (
+            <div className="empty-state">
+              <div className="empty-icon">✅</div>
+              <p>No critical issues found</p>
+              <span className="empty-subtitle">Your code looks clean!</span>
+            </div>
+          )}
+        </section>
+
+        {/* Suggestions Section */}
+        <section className="results-section suggestions-section">
+          <div className="section-header">
+            <div className="section-icon">💡</div>
+            <h3 className="section-title">Smart Recommendations</h3>
+          </div>
+          {suggestions.length ? (
+            <div className="suggestions-grid">
+              {suggestions.map((suggestion, index) => (
+                <div key={index} className="suggestion-card">
+                  <div className="suggestion-icon">💎</div>
+                  <div className="suggestion-content">
+                    <p className="suggestion-text">{suggestion}</p>
+                    <div className="suggestion-actions">
+                      <button className="action-btn primary">Apply</button>
+                      <button className="action-btn secondary">Learn more</button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="empty-state">
+              <div className="empty-icon">🎯</div>
+              <p>No recommendations</p>
+              <span className="empty-subtitle">Code follows best practices</span>
+            </div>
+          )}
+        </section>
+      </div>
+
+      {/* Refactored Files Section */}
+      <section className="results-section files-section">
+        <div className="section-header">
+          <div className="section-icon">📄</div>
+          <h3 className="section-title">Refactored Files</h3>
+          {refactoredFiles.length > 0 && (
+            <span className="files-count">{refactoredFiles.length} files improved</span>
+          )}
+        </div>
+        {refactoredFiles.length ? (
+          <div className="files-grid">
+            {refactoredFiles.map((file, index) => (
+              <div key={index} className="file-card">
+                <div 
+                  className="file-header"
+                  onClick={() => toggleFileExpansion(index)}
+                >
+                  <div className="file-info">
+                    <strong className="file-name">{file.filename}</strong>
+                    <span className="file-stats">
+                      {file.before && `${file.before.split('\n').length} → ${file.after.split('\n').length} lines`}
+                    </span>
+                  </div>
+                  <button className="expand-btn">
+                    {expandedFiles[index] ? '▼' : '▶'}
+                  </button>
+                </div>
+                
+                {expandedFiles[index] && (
+                  <div className="file-comparison">
+                    <div className="code-column">
+                      <div className="code-header">
+                        <h4 className="code-label before">Original</h4>
+                        <span className="code-badge warning">Before</span>
+                      </div>
+                      <pre className="code-box before">
+                        <code>{file.before}</code>
+                      </pre>
+                    </div>
+                    <div className="code-column">
+                      <div className="code-header">
+                        <h4 className="code-label after">Improved</h4>
+                        <span className="code-badge success">After</span>
+                      </div>
+                      <pre className="code-box after">
+                        <code>{file.after}</code>
+                      </pre>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
         ) : (
-          <div className="text-sm text-gray-500">No refactored files supplied.</div>
+          <div className="empty-state">
+            <div className="empty-icon">🔧</div>
+            <p>No refactored files supplied</p>
+            <span className="empty-subtitle">Run refactor to see improvements</span>
+          </div>
         )}
       </section>
     </div>

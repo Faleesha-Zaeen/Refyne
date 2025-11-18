@@ -1,4 +1,5 @@
 import React from "react";
+import "../styles/style.css";
 
 const TimelinePanel = ({ history = [] }) => {
   const hasHistory = Array.isArray(history) && history.length > 0;

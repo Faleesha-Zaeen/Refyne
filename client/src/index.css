@@ -1,16 +1,2 @@
 /* Reset / normalize basic spacing */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
 
-/* Smooth text & animations */
-html, body {
-  font-family: 'Inter', sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-/* Import your main styling */
-@import "./styles/style.css";

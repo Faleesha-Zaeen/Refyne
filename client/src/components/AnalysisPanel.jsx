@@ -1,4 +1,5 @@
 import React from "react";
+import "../styles/style.css";
 
 const StatCard = ({ label, value, helper }) => (
   <div className="stat-card">
@@ -12,7 +13,7 @@ const AnalysisPanel = ({ analysis }) => {
   if (!analysis) {
     return (
       <div className="placeholder-card">
-        <div className="placeholder-icon">📊</div>
+        <div className="placeholder-icon"></div>
         <h3>Ready for Analysis</h3>
         <p>Upload a project to unlock architecture metrics, structure visuals, and guided recommendations.</p>
       </div>
@@ -54,11 +55,11 @@ const AnalysisPanel = ({ analysis }) => {
 
       <div className="visual-grid">
         <div className="visual-placeholder">
-          <div className="visual-icon">🔍</div>
+          <div className="visual-icon"></div>
           <span>Structure visualization coming soon</span>
         </div>
         <div className="visual-placeholder">
-          <div className="visual-icon">📈</div>
+          <div className="visual-icon"></div>
           <span>Metric trends coming soon</span>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import "../styles/style.css";
 
 const ResultsPanel = ({ result }) => {
   const [expandedFiles, setExpandedFiles] = useState({});
@@ -6,20 +7,20 @@ const ResultsPanel = ({ result }) => {
   if (!result) {
     return (
       <div className="results-empty-state">
-        <div className="empty-icon">⚡</div>
+        <div className="empty-icon"></div>
         <h3>Awaiting Analysis</h3>
         <p>Run a refactor to unlock AI-powered insights and code transformations</p>
         <div className="empty-features">
           <div className="feature">
-            <span className="feature-icon">🔍</span>
+            <span className="feature-icon"></span>
             <span>Deep code analysis</span>
           </div>
           <div className="feature">
-            <span className="feature-icon">🎯</span>
+            <span className="feature-icon"></span>
             <span>Smart recommendations</span>
           </div>
           <div className="feature">
-            <span className="feature-icon">⚡</span>
+            <span className="feature-icon"></span>
             <span>Instant refactoring</span>
           </div>
         </div>

@@ -9,7 +9,7 @@ const Recommendations = ({ analysis, refactorResult }) => {
           <p>Smart suggestions for code improvement and optimization</p>
         </div>
         <div className="placeholder-card">
-          <div className="placeholder-icon">💡</div>
+          <div className="placeholder-icon"></div>
           <h3>No Analysis Data</h3>
           <p>Upload a project and run analysis to get AI-powered recommendations</p>
         </div>

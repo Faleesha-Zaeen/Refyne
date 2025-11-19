@@ -295,6 +295,70 @@ body {
   width: 100%;
 }
 
+/* Add to your styles.css */
+.generate-recommendations-section {
+  text-align: center;
+  margin: 2rem 0;
+}
+
+.generate-recommendations-btn {
+  background: var(--gradient-primary);
+  color: white;
+  border: none;
+  border-radius: 1.5rem;
+  padding: 1.5rem 2rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: var(--glow-primary);
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 300px;
+}
+
+.generate-recommendations-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--glow-neon);
+}
+
+.generate-recommendations-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-icon {
+  font-size: 1.5rem;
+}
+
+.btn-subtext {
+  font-size: 0.8rem;
+  opacity: 0.9;
+  font-weight: 400;
+}
+
+.generate-hint {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  margin-top: 1rem;
+}
+
+.retry-btn {
+  background: var(--gradient-primary);
+  color: white;
+  border: none;
+  border-radius: 0.75rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  margin-top: 1rem;
+}
+
 /* Card Base Styles */
 .card, 
 .panel-box, 

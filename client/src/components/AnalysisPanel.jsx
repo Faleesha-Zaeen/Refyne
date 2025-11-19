@@ -53,16 +53,7 @@ const AnalysisPanel = ({ analysis }) => {
         ))}
       </div>
 
-      <div className="visual-grid">
-        <div className="visual-placeholder">
-          <div className="visual-icon"></div>
-          <span>Structure visualization coming soon</span>
-        </div>
-        <div className="visual-placeholder">
-          <div className="visual-icon"></div>
-          <span>Metric trends coming soon</span>
-        </div>
-      </div>
+      
 
       <div className="panel-box recommendations-panel">
         <h3 className="panel-title">Next Recommendations</h3>

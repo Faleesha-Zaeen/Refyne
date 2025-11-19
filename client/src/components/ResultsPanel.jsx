@@ -42,7 +42,7 @@ const ResultsPanel = ({ result }) => {
       {/* Summary Section */}
       <section className="results-section summary-section">
         <div className="section-header">
-          <div className="section-icon">🧠</div>
+          <div className="section-icon"></div>
           <h3 className="section-title">AI Analysis Summary</h3>
         </div>
         <div className="summary-card">
@@ -70,7 +70,7 @@ const ResultsPanel = ({ result }) => {
         {/* Issues Section */}
         <section className="results-section issues-section">
           <div className="section-header">
-            <div className="section-icon">🚨</div>
+            <div className="section-icon"></div>
             <h3 className="section-title">Issues Detected</h3>
             {issues.length > 0 && (
               <span className="issue-count">{issues.length} found</span>
@@ -83,14 +83,14 @@ const ResultsPanel = ({ result }) => {
                   <div className="issue-severity"></div>
                   <div className="issue-content">
                     <span className="issue-text">{issue}</span>
-                    <button className="quick-fix-btn">Show fix</button>
+                    
                   </div>
                 </div>
               ))}
             </div>
           ) : (
             <div className="empty-state">
-              <div className="empty-icon">✅</div>
+              <div className="empty-icon"></div>
               <p>No critical issues found</p>
               <span className="empty-subtitle">Your code looks clean!</span>
             </div>
@@ -100,27 +100,24 @@ const ResultsPanel = ({ result }) => {
         {/* Suggestions Section */}
         <section className="results-section suggestions-section">
           <div className="section-header">
-            <div className="section-icon">💡</div>
+            <div className="section-icon"></div>
             <h3 className="section-title">Smart Recommendations</h3>
           </div>
           {suggestions.length ? (
             <div className="suggestions-grid">
               {suggestions.map((suggestion, index) => (
                 <div key={index} className="suggestion-card">
-                  <div className="suggestion-icon">💎</div>
+                 
                   <div className="suggestion-content">
                     <p className="suggestion-text">{suggestion}</p>
-                    <div className="suggestion-actions">
-                      <button className="action-btn primary">Apply</button>
-                      <button className="action-btn secondary">Learn more</button>
-                    </div>
+                    
                   </div>
                 </div>
               ))}
             </div>
           ) : (
             <div className="empty-state">
-              <div className="empty-icon">🎯</div>
+              <div className="empty-icon"></div>
               <p>No recommendations</p>
               <span className="empty-subtitle">Code follows best practices</span>
             </div>

@@ -78,6 +78,16 @@ const App = () => {
       setRefactorLoading(false);
     }
   };
+  // In App.jsx - add handleGenerateRecommendations function
+const handleGenerateRecommendations = async () => {
+  try {
+    const res = await axios.post('/api/recommendations', { analysis });
+    return res.data; // Return the API response
+  } catch (err) {
+    console.error('Generate recommendations failed', err);
+    throw err; // Re-throw to handle in component
+  }
+};
 
   const renderCurrentPage = () => {
     const pageProps = {
@@ -89,7 +99,8 @@ const App = () => {
       refactorLoading,
       refactorResult,
       onUpload: handleUpload,
-      onRefactor: handleRefactor
+      onRefactor: handleRefactor,
+      onGenerateRecommendations: handleGenerateRecommendations
     };
 
     switch (currentPage) {

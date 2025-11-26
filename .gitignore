@@ -25,3 +25,5 @@ server/uploads/*.tmp
 .vscode/
 .idea/
 *.sw?
+
+data/

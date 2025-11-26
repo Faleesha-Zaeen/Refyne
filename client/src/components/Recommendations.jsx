@@ -80,10 +80,7 @@ const Recommendations = ({ analysis, refactorResult }) => {
                 <span className={`metric-tag ${rec.impact}`}>{rec.impact}</span>
               </div>
             </div>
-            <div className="rec-actions">
-              <button className="action-btn primary">Apply Suggestion</button>
-              <button className="action-btn secondary">View Details</button>
-            </div>
+          
           </div>
         ))}
       </div>

@@ -4,6 +4,31 @@ import "../styles/style.css";
 const ResultsPanel = ({ result }) => {
   const [expandedFiles, setExpandedFiles] = useState({});
 
+  // Function to clean ** formatting from text
+  const cleanText = (text) => {
+    if (!text) return '';
+    return text.replace(/\*\*(.*?)\*\*/g, '$1').trim();
+  };
+
+  // Function to format text with proper styling for cleaned bold sections
+  const formatTextWithBold = (text) => {
+    if (!text) return '';
+    
+    const parts = text.split(/(\*\*.*?\*\*)/g);
+    
+    return parts.map((part, index) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        const cleanPart = part.replace(/\*\*/g, '');
+        return (
+          <strong key={index} style={{ color: 'var(--text-primary)', fontWeight: '600' }}>
+            {cleanPart}
+          </strong>
+        );
+      }
+      return part;
+    });
+  };
+
   if (!result) {
     return (
       <div className="results-empty-state">
@@ -47,7 +72,7 @@ const ResultsPanel = ({ result }) => {
         </div>
         <div className="summary-card">
           <div className="summary-content">
-            <p className="summary-text">{summary || "No summary available."}</p>
+            <p className="summary-text">{cleanText(summary) || "No summary available."}</p>
           </div>
           <div className="summary-metrics">
             <div className="metric-badge">
@@ -82,8 +107,9 @@ const ResultsPanel = ({ result }) => {
                 <div key={index} className="issue-item">
                   <div className="issue-severity"></div>
                   <div className="issue-content">
-                    <span className="issue-text">{issue}</span>
-                    
+                    <span className="issue-text">
+                      {formatTextWithBold(issue)}
+                    </span>
                   </div>
                 </div>
               ))}
@@ -107,10 +133,10 @@ const ResultsPanel = ({ result }) => {
             <div className="suggestions-grid">
               {suggestions.map((suggestion, index) => (
                 <div key={index} className="suggestion-card">
-                 
                   <div className="suggestion-content">
-                    <p className="suggestion-text">{suggestion}</p>
-                    
+                    <p className="suggestion-text">
+                      {formatTextWithBold(suggestion)}
+                    </p>
                   </div>
                 </div>
               ))}
@@ -180,7 +206,7 @@ const ResultsPanel = ({ result }) => {
           </div>
         ) : (
           <div className="empty-state">
-            <div className="empty-icon">🔧</div>
+            <div className="empty-icon"></div>
             <p>No refactored files supplied</p>
             <span className="empty-subtitle">Run refactor to see improvements</span>
           </div>

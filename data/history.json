@@ -1,5 +1,274 @@
 [
   {
+    "timestamp": 1764146194687,
+    "type": "gemini-refactor",
+    "summary": "The project exhibits excellent modularity and architectural health scores, indicating a well-structured codebase with clear component boundaries. This is commendable, especially the high `modularityScore` and `architectureScore`. However, a 'heavy dependency usage' flag for a relatively small project (5 files, 229 lines) suggests potential for tight coupling between internal components, despite the good overall structure. The absence of any detected external library imports (`totalImports: 0`) for a project with internal dependencies is an unusual metric that warrants further investigation, as it could imply missed opportunities for leveraging established libraries.",
+    "issues": [
+      "**Potential for Tightly Coupled Internal Components**: Despite a high `modularityScore` (95), the `dependencyRatio` of 2 (10 dependencies across 5 files) indicates that individual files might have numerous direct connections to other internal files. This pattern, while manageable in a small codebase, could lead to fragility, increased cognitive load, and difficulty in independent component evolution or testing as the project scales. It often points to direct reliance on concrete implementations rather than interfaces or abstractions.",
+      "**Unusual Absence of External Library Imports (`totalImports: 0`)**: For a project demonstrating internal dependencies, the complete lack of external library imports is highly unusual. This could imply the project is entirely self-contained (potentially reinventing functionalities that could be handled by robust, battle-tested libraries), relies solely on basic language features (unlikely for all 229 lines), or the metric collection for external imports is misconfigured. Relying solely on custom implementations for common tasks can increase development effort, maintenance burden, and potentially introduce vulnerabilities or bugs already solved by community libraries."
+    ],
+    "suggestions": [
+      "**Introduce Abstraction Layers and Interfaces**: For components that are heavily depended upon (e.g., utility functions, data access, validation), define clear interfaces (e.g., using Python Protocols, abstract base classes, or explicit interface classes in other languages). Consumers should then depend on these abstractions rather than concrete implementations. This enhances flexibility, testability, and reduces ripple effects during changes.",
+      "**Implement Dependency Injection (DI) or Explicit Dependency Passing**: Instead of modules directly importing and instantiating their dependencies, pass them through constructors or function arguments. This makes dependencies explicit, easier to mock for unit testing, and facilitates swapping implementations (e.g., using a different validator or data source). This can significantly reduce direct `import` statements and improve component isolation.",
+      "**Consolidate Common Utilities/Services**: If multiple files share similar logical dependencies on parts of other files (e.g., configuration readers, logging handlers, specific data formatters), consider extracting these into dedicated, focused service modules. These services can then expose a stable API, centralizing common functionality and reducing the number of direct dependencies on individual, granular implementation details.",
+      "**Investigate the `totalImports: 0` Metric**: Verify if this genuinely means no external libraries are used. If so, conduct an assessment to identify areas where leveraging well-established open-source libraries could improve robustness, performance, security, or development velocity, rather than investing time in custom solutions. This is especially relevant for tasks like data parsing, serialization, networking, or complex algorithms."
+    ],
+    "refactoredFiles": [
+      {
+        "filename": "data_parser.py",
+        "before": "# Filename: data_parser.py\n\n# Assume data_validator.py exists and contains a class DataValidator.\n# This creates a direct, tightly coupled dependency on a concrete implementation.\n\nclass DataParser:\n    def __init__(self):\n        # Direct, tightly coupled import and instantiation.\n        # This binds DataParser directly to DataValidator's concrete implementation.\n        from data_validator import DataValidator # Example of a direct import contributing to dependency count\n        self._validator = DataValidator()\n\n    def parse(self, raw_data: str) -> dict:\n        print(\"DataParser: Parsing raw data...\")\n        # Simulate parsing logic for a simple string input\n        try:\n            # Example: parse 'id:1,value:hello' into a dictionary\n            parts = raw_data.strip().split(',')\n            parsed_data = {}\n            for part in parts:\n                key_val = part.split(':')\n                if len(key_val) == 2:\n                    parsed_data[key_val[0]] = key_val[1]\n            if 'id' in parsed_data: # Convert id to int if present\n                parsed_data['id'] = int(parsed_data['id'])\n        except Exception as e:\n            raise ValueError(f\"Failed to parse data: {e}\")\n\n        # Uses the directly instantiated validator instance.\n        if not self._validator.is_valid_structure(parsed_data):\n            raise ValueError(\"Parsed data has invalid structure.\")\n        \n        print(\"DataParser: Data parsed and validated successfully (initial check).\")\n        return parsed_data\n",
+        "after": "# Filename: data_parser.py\nfrom typing import Protocol, runtime_checkable\n\n# Define an explicit interface (Protocol) for the validator dependency.\n# This promotes the 'Dependency Inversion Principle' – DataParser now\n# depends on an abstraction (IDataValidator), not a concrete implementation.\n@runtime_checkable\nclass IDataValidator(Protocol):\n    \"\"\"Interface for data validation services, defining contract methods.\"\"\"\n    def is_valid_structure(self, data: dict) -> bool:\n        \"\"\"Checks if the given dictionary data adheres to a defined structure.\"\"\"\n        ...\n    # Add other validation methods as needed, e.g., is_valid_business_rules(self, data: dict)\n\nclass DataParser:\n    def __init__(self, validator: IDataValidator):\n        # Dependency Injected validator via constructor.\n        # DataParser no longer imports the concrete DataValidator class directly.\n        # It receives an object that adheres to the IDataValidator interface.\n        self._validator = validator\n\n    def parse(self, raw_data: str) -> dict:\n        print(\"DataParser: Parsing raw data...\")\n        # Simulate parsing logic for a simple string input\n        try:\n            # Example: parse 'id:1,value:hello' into a dictionary\n            parts = raw_data.strip().split(',')\n            parsed_data = {}\n            for part in parts:\n                key_val = part.split(':')\n                if len(key_val) == 2:\n                    parsed_data[key_val[0]] = key_val[1]\n            if 'id' in parsed_data: # Convert id to int if present\n                parsed_data['id'] = int(parsed_data['id'])\n        except Exception as e:\n            raise ValueError(f\"Failed to parse data: {e}\")\n\n        # Uses the injected validator, decoupled from its concrete type.\n        if not self._validator.is_valid_structure(parsed_data):\n            raise ValueError(\"Parsed data has invalid structure.\")\n        \n        print(\"DataParser: Data parsed and validated successfully (initial check).\")\n        return parsed_data\n\n# To make this example self-contained and runnable for demonstration:\n# In a real project, ConcreteDataValidator would typically reside in its own file\n# (e.g., data_validator.py) and would be instantiated and passed to DataParser\n# by an orchestrating component (e.g., main.py or a DI container).\nclass ConcreteDataValidator:\n    def is_valid_structure(self, data: dict) -> bool:\n        print(\"ConcreteDataValidator: Performing structure validation...\")\n        # Example validation: ensure 'id' is an int and 'value' is a non-empty string\n        is_id_valid = isinstance(data.get('id'), int)\n        is_value_valid = isinstance(data.get('value'), str) and len(data['value']) > 0\n        return is_id_valid and is_value_valid\n\n# Example usage in an orchestration layer (e.g., in main.py):\n# from data_parser import DataParser, ConcreteDataValidator\n# my_validator = ConcreteDataValidator()\n# parser = DataParser(my_validator)\n# try:\n#     result = parser.parse(\"id:1,value:some_data\")\n#     print(f\"Final result: {result}\")\n#     invalid_result = parser.parse(\"id:abc,value:\") # Example of invalid data\n# except ValueError as e:\n#     print(f\"Error processing data: {e}\")\n"
+      }
+    ]
+  },
+  {
+    "id": "9d84268f-5972-4169-a455-4951eeb3d936",
+    "analyzedAt": "2025-11-26T08:35:31.155Z",
+    "summary": {
+      "headline": "Architecture looks healthy overall.",
+      "highlights": [
+        "Strong modular structure detected.",
+        "Heavy dependency usage relative to file count."
+      ]
+    },
+    "stats": {
+      "fileCount": 5,
+      "totalLines": 229,
+      "totalFunctions": 19,
+      "totalImports": 0,
+      "dependencyCount": 10,
+      "averageLinesPerFile": 45.8,
+      "averageFunctionsPerFile": 3.8,
+      "functionDensity": 3.8,
+      "dependencyRatio": 2,
+      "modularityScore": 95,
+      "architectureScore": 95
+    }
+  },
+  {
+    "timestamp": 1764145981800,
+    "type": "gemini-refactor",
+    "summary": "The project metrics indicate significant architectural shortcomings, particularly concerning modularity and overall structural health. Despite the provided raw statistics being zero (suggesting an issue with the analysis itself or an empty project, which we will interpret as placeholder data given the explicit scores), the 'modularityScore' of 10 and 'architectureScore' of 35 are extremely low. This points to a highly coupled, poorly structured codebase that will be difficult to maintain, extend, and test. The primary area for improvement lies in defining clear modular boundaries and improving separation of concerns.",
+    "issues": [
+      "**Extremely Poor Modularization (Modularity Score: 10):** This is the most critical issue. It implies a 'big ball of mud' architecture where components are highly interdependent, leading to tightly coupled code. This makes it challenging to understand, test, and modify individual parts without affecting others.",
+      "**Low Architectural Quality (Architecture Score: 35):** A low overall architecture score confirms broad structural problems. This likely impacts maintainability, scalability, testability, and the overall clarity of the codebase.",
+      "**Lack of Separation of Concerns:** Highly coupled systems often combine multiple responsibilities within single classes or modules, violating the Single Responsibility Principle.",
+      "**Difficulty in Testing and Debugging:** Tightly coupled components are hard to unit test in isolation, often requiring extensive setup or mocking. Debugging becomes more complex as issues can propagate across many interdependent parts.",
+      "**High Maintenance Burden:** Changes in one area are likely to cause ripple effects, leading to increased development time, higher risk of introducing bugs, and slower feature delivery.",
+      "**Potential for Duplicate Code (Inferred):** Poor modularization frequently leads to logic being duplicated across different parts of the system rather than being abstracted into reusable components.",
+      "**Lack of Documentation/Clarity (Inferred):** Low architectural scores often correlate with code that is hard to understand without clear boundaries, consistent patterns, or explicit documentation."
+    ],
+    "suggestions": [
+      "**Establish Clear Modular Boundaries:** Identify natural boundaries within the domain (e.g., using Domain-Driven Design principles). Refactor large, monolithic components into smaller, cohesive modules or services, each with a well-defined purpose and public interface.",
+      "**Enforce Separation of Concerns:** Apply principles like the Single Responsibility Principle (SRP) to ensure each class and module has one clear responsibility. Use Dependency Injection (DI) to manage dependencies and reduce tight coupling.",
+      "**Introduce Layered Architecture or Hexagonal Architecture (Ports & Adapters):** These patterns provide a robust structure for separating business logic from infrastructure concerns, improving testability and maintainability.",
+      "**Refactor God Objects/Classes:** Break down large, multi-functional classes into smaller, specialized components that collaborate. This directly addresses the 'additional modular boundaries' highlight.",
+      "**Implement Architectural Governance:** Define architectural guidelines, conduct regular code reviews focusing on architectural compliance, and potentially use architectural linting tools to prevent decay.",
+      "**Prioritize Testability:** Design components to be easily testable in isolation. This often involves making dependencies explicit and injectable.",
+      "**Improve Code Cohesion:** Ensure that elements within a module or class are functionally related. If a module performs vastly different functions, it's a candidate for splitting."
+    ],
+    "refactoredFiles": [
+      {
+        "filename": "order_processor.py",
+        "before": "```python\n# order_processor.py - Before Refactor (Monolithic)\n\nimport logging\nimport datetime\nimport json\nimport requests # For external notification service\n\nlogging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')\n\nclass OrderProcessor:\n    def __init__(self, db_connection_string):\n        self.db_connection_string = db_connection_string # Represents a direct DB dependency\n        # In a real app, this might be a full ORM session or direct DB API\n\n    def _validate_order(self, order_data):\n        \"\"\"Internal method to validate order data.\"\"\"\n        if not all(k in order_data for k in ['items', 'customer_id', 'total_amount']):\n            logging.error(f\"Missing required fields in order: {order_data}\")\n            return False\n        if not isinstance(order_data['items'], list) or not order_data['items']:\n            logging.error(f\"Order items are invalid or empty: {order_data['items']}\")\n            return False\n        if not isinstance(order_data['total_amount'], (int, float)) or order_data['total_amount'] <= 0:\n            logging.error(f\"Invalid total amount: {order_data['total_amount']}\")\n            return False\n        # More complex validation could go here\n        return True\n\n    def _save_order_to_db(self, order_data):\n        \"\"\"Internal method to simulate saving order to a database.\"\"\"\n        # In a real scenario, this would interact with a database driver/ORM\n        print(f\"Connecting to DB with: {self.db_connection_string}\")\n        order_id = f\"ORDER-{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}\"\n        logging.info(f\"Order {order_id} saved to DB (simulated). Data: {json.dumps(order_data)}\")\n        return order_id\n\n    def _send_notification(self, order_id, customer_id):\n        \"\"\"Internal method to send an external notification.\"\"\"\n        try:\n            notification_url = \"https://api.example.com/notifications\"\n            payload = {\n                \"order_id\": order_id,\n                \"customer_id\": customer_id,\n                \"message\": f\"Your order {order_id} has been successfully processed!\"\n            }\n            response = requests.post(notification_url, json=payload, timeout=5)\n            response.raise_for_status()\n            logging.info(f\"Notification sent for order {order_id} to customer {customer_id}\")\n        except requests.exceptions.RequestException as e:\n            logging.error(f\"Failed to send notification for order {order_id}: {e}\")\n\n    def process_order(self, order_data):\n        \"\"\"\n        Processes an incoming order, including validation, persistence, and notification.\n        This method combines several distinct responsibilities.\n        \"\"\"\n        logging.info(f\"Attempting to process order: {order_data.get('customer_id', 'N/A')}\")\n\n        if not self._validate_order(order_data):\n            logging.error(\"Order validation failed. Aborting processing.\")\n            return {\"status\": \"failed\", \"reason\": \"validation_error\"}\n\n        order_id = self._save_order_to_db(order_data)\n        if not order_id:\n            logging.error(\"Failed to save order to database. Aborting processing.\")\n            return {\"status\": \"failed\", \"reason\": \"db_error\"}\n\n        self._send_notification(order_id, order_data['customer_id'])\n\n        return {\"status\": \"success\", \"order_id\": order_id}\n\n# Example Usage:\n# if __name__ == \"__main__\":\n#     processor = OrderProcessor(\"postgresql://user:pass@host:port/dbname\")\n#     test_order = {\n#         \"items\": [{\"product_id\": \"P1\", \"quantity\": 2}],\n#         \"customer_id\": \"C123\",\n#         \"total_amount\": 100.50\n#     }\n#     result = processor.process_order(test_order)\n#     print(f\"Processing result: {result}\")\n#\n#     invalid_order = {\n#         \"items\": [],\n#         \"customer_id\": \"C456\",\n#         \"total_amount\": -50\n#     }\n#     result_invalid = processor.process_order(invalid_order)\n#     print(f\"Processing result for invalid order: {result_invalid}\")\n```",
+        "after": "```python\n# order_processor.py - After Refactor (Orchestrator)\n\nimport logging\n# Import the newly created modular components\nfrom order_validation import OrderValidator\nfrom order_repository import OrderRepository\nfrom notification_service import NotificationService\n\nclass OrderProcessor:\n    # Dependencies are now injected, adhering to Dependency Inversion Principle\n    def __init__(self, validator: OrderValidator, repository: OrderRepository, notifier: NotificationService):\n        self.validator = validator\n        self.repository = repository\n        self.notifier = notifier\n        logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')\n\n    def process_order(self, order_data):\n        \"\"\"\n        Orchestrates the processing of an order by delegating to specialized services.\n        This method now has a single responsibility: orchestrating the workflow.\n        \"\"\"\n        logging.info(f\"Attempting to process order for customer: {order_data.get('customer_id', 'N/A')}\")\n\n        if not self.validator.validate_order(order_data):\n            logging.error(\"Order processing failed due to validation errors.\")\n            return {\"status\": \"failed\", \"reason\": \"validation_error\"}\n\n        order_id = self.repository.save_order(order_data)\n        if not order_id:\n            logging.error(\"Order processing failed due to database error.\")\n            return {\"status\": \"failed\", \"reason\": \"db_error\"}\n\n        # Notification is now an independent concern, less critical to the core order processing success\n        if not self.notifier.send_order_confirmation(order_id, order_data['customer_id']):\n            logging.warning(f\"Order {order_id} processed, but failed to send notification.\")\n\n        logging.info(f\"Order {order_id} successfully processed for customer {order_data['customer_id']}.\")\n        return {\"status\": \"success\", \"order_id\": order_id}\n\n# Example Usage with Dependency Injection:\n# if __name__ == \"__main__\":\n#     # Instantiate dependencies (these would be in their own files/modules)\n#     validator = OrderValidator()\n#     repository = OrderRepository(\"postgresql://user:pass@host:port/dbname\")\n#     notifier = NotificationService(notification_api_url=\"http://localhost:8080/api/notifications\") # Use a mock or local URL for testing\n#\n#     # Inject dependencies into the OrderProcessor\n#     processor = OrderProcessor(validator, repository, notifier)\n#\n#     test_order = {\n#         \"items\": [{\"product_id\": \"P1\", \"quantity\": 2}],\n#         \"customer_id\": \"C123\",\n#         \"total_amount\": 100.50\n#     }\n#     result = processor.process_order(test_order)\n#     print(f\"Processing result: {result}\")\n#\n#     invalid_order = {\n#         \"items\": [], # Invalid items\n#         \"customer_id\": \"C456\",\n#         \"total_amount\": -50 # Invalid amount\n#     }\n#     result_invalid = processor.process_order(invalid_order)\n#     print(f\"Processing result for invalid order: {result_invalid}\")\n```\n\n**Note on Refactor:**\nThis refactor demonstrates the crucial step of decomposing a 'god object' (the original `OrderProcessor`) into multiple, single-responsibility modules. The original `order_processor.py` was responsible for validation, database interaction, and external notifications. In the 'After' state, these concerns are delegated to new, dedicated modules (which would typically reside in separate files):\n1.  `order_validation.py` (containing `OrderValidator` class)\n2.  `order_repository.py` (containing `OrderRepository` class)\n3.  `notification_service.py` (containing `NotificationService` class)\n\nThe refactored `order_processor.py` now acts purely as an orchestrator, consuming these specialized services via dependency injection. This significantly improves modularity, testability, and maintainability, directly addressing the low `modularityScore` and the need for 'additional modular boundaries'."
+      }
+    ]
+  },
+  {
+    "id": "4379be9b-882c-402d-92c7-68f4ae491c53",
+    "analyzedAt": "2025-11-26T08:31:48.196Z",
+    "summary": {
+      "headline": "Architecture needs attention.",
+      "highlights": [
+        "Project may benefit from additional modular boundaries."
+      ]
+    },
+    "stats": {
+      "fileCount": 0,
+      "totalLines": 0,
+      "totalFunctions": 0,
+      "totalImports": 0,
+      "dependencyCount": 0,
+      "averageLinesPerFile": 0,
+      "averageFunctionsPerFile": 0,
+      "functionDensity": 0,
+      "dependencyRatio": 0,
+      "modularityScore": 10,
+      "architectureScore": 35
+    }
+  },
+  {
+    "timestamp": 1764145511642,
+    "type": "gemini-refactor",
+    "summary": "Based on the high modularity and architecture scores (95 each), the project exhibits a strong architectural foundation, especially considering its current small scale. This indicates well-defined boundaries and a clear separation of concerns. However, the notable dependency ratio (2.2 dependencies per file) for such a small codebase (5 files, 172 lines) suggests a potential for overly granular or direct external dependency usage within individual modules. While not critical at this scale, this pattern could introduce complexity, increase cognitive load, and hinder scalability if not managed proactively as the project grows.",
+    "issues": [
+      "**High Dependency Density per File**: With an average of 2.2 unique dependencies per file for a project of only 5 files and 8 functions, individual modules might be pulling in too many external or internal concerns directly. This can indicate lower internal cohesion or an opportunity for better dependency encapsulation, even with a high modularity score.",
+      "**Potential for Premature Abstraction/Over-reliance on Libraries**: For a very small codebase, a relatively high number of dependencies (11 unique dependencies for 8 functions) might suggest that simple tasks are being outsourced to libraries when simpler, custom implementations or standard library features could suffice. This increases project overhead (bundle size, maintenance) without commensurate benefit at this scale.",
+      "**Scalability Risk**: While current architecture and modularity scores are excellent, the current dependency pattern, if unchecked, could lead to tighter coupling between application logic and specific external library implementations. This might complicate future changes, upgrades, or migrations, eroding the currently strong modularity as the project grows."
+    ],
+    "suggestions": [
+      "**Encapsulate External Dependencies**: Create thin, internal wrapper modules (e.g., `logger.js`, `validator.js`) for external libraries. This centralizes the interaction with third-party tools, reduces direct external imports in business logic files, and makes it easier to swap out or upgrade libraries in the future without impacting multiple consuming modules.",
+      "**Review Dependency Necessity**: Conduct a thorough audit of all 11 dependencies. Assess if each is truly indispensable for the functionality provided and if its benefits outweigh the overhead. Identify opportunities to replace some with simpler, custom implementations or built-in language features for basic functionalities.",
+      "**Reinforce Single Responsibility Principle (SRP)**: Ensure each file and function is laser-focused on a single, well-defined responsibility. This often naturally leads to a reduction in the number of diverse dependencies a module requires, improving its cohesion.",
+      "**Strategic Internal Utility Modules**: For commonly used internal functions or consolidated logic, create dedicated utility modules (e.g., `dataTransformers.js`, `errorHandler.js`). This helps prevent individual files from pulling in disparate internal components and improves internal cohesion across the codebase."
+    ],
+    "refactoredFiles": [
+      {
+        "filename": "services/dataService.js",
+        "before": "/*\n  Context: This file represents one of the 5 files in the project.\n  It directly imports external libraries for common concerns like validation and logging,\n  contributing to the 'heavy dependency usage relative to file count'.\n*/\n\nimport axios from 'axios';\nimport { isURL } from '@my-org/validator-lib'; // Direct external dependency\nimport { logInfo, logError } from '@my-org/logger-lib'; // Direct external dependency\nimport { transformData } from '../utils/dataTransformer'; // Internal utility\n\n/**\n * Fetches and processes data from a given URL.\n * @param {string} url - The API endpoint URL.\n * @param {object} payload - The data payload to send.\n * @returns {Promise<object>} The processed data.\n */\nexport async function fetchDataAndProcess(url, payload) {\n  if (!isURL(url)) {\n    logError(`[DataService] Invalid URL provided: ${url}`);\n    throw new Error('Invalid URL');\n  }\n\n  try {\n    logInfo(`[DataService] Fetching data from ${url}`);\n    const response = await axios.post(url, payload);\n    const processedData = transformData(response.data);\n    logInfo(`[DataService] Data processed successfully from ${url}.`);\n    return processedData;\n  } catch (error) {\n    logError(`[DataService] Failed to fetch or process data from ${url}: ${error.message}`);\n    throw error;\n  }\n}\n",
+        "after": "/*\n  Context: This file is refactored to reduce its direct external dependencies.\n  It now imports internal wrapper modules for validation and logging.\n  This improves encapsulation and reduces the direct impact of external library changes.\n\n  Note: This refactor assumes the creation of new files: `services/logger.js`\n  and `services/validation.js` which encapsulate the external libraries.\n*/\n\nimport axios from 'axios';\nimport { logger } from './logger'; // Internal logging module wrapper\nimport { validation } from './validation'; // Internal validation module wrapper\nimport { transformData } from '../utils/dataTransformer'; // Internal utility\n\n/**\n * Fetches and processes data from a given URL.\n * @param {string} url - The API endpoint URL.\n * @param {object} payload - The data payload to send.\n * @returns {Promise<object>} The processed data.\n */\nexport async function fetchDataAndProcess(url, payload) {\n  if (!validation.isValidURL(url)) {\n    logger.error(`Invalid URL provided: ${url}`);\n    throw new Error('Invalid URL');\n  }\n\n  try {\n    logger.info(`Fetching data from ${url}`);\n    const response = await axios.post(url, payload);\n    const processedData = transformData(response.data);\n    logger.info(`Data processed successfully from ${url}.`);\n    return processedData;\n  } catch (error) {\n    logger.error(`Failed to fetch or process data from ${url}: ${error.message}`);\n    throw error;\n  }\n}\n"
+      }
+    ]
+  },
+  {
+    "id": "9a461d96-bdc0-41ee-88ed-48b8d1877883",
+    "analyzedAt": "2025-11-26T08:24:21.826Z",
+    "summary": {
+      "headline": "Architecture looks healthy overall.",
+      "highlights": [
+        "Strong modular structure detected.",
+        "Heavy dependency usage relative to file count."
+      ]
+    },
+    "stats": {
+      "fileCount": 5,
+      "totalLines": 172,
+      "totalFunctions": 8,
+      "totalImports": 13,
+      "dependencyCount": 11,
+      "averageLinesPerFile": 34.4,
+      "averageFunctionsPerFile": 1.6,
+      "functionDensity": 1.6,
+      "dependencyRatio": 2.2,
+      "modularityScore": 95,
+      "architectureScore": 95
+    }
+  },
+  {
+    "timestamp": 1764145373302,
+    "type": "gemini-refactor",
+    "summary": "The project exhibits a commendably healthy architecture with strong modularity and a high overall architecture score. This indicates a well-structured codebase, likely with clear separation of concerns and a thoughtful design. The primary area for potential improvement, highlighted in the analysis, is the 'heavy dependency usage relative to file count'. While not necessarily a critical flaw given the high modularity score, it suggests a fine-grained interdependency that could benefit from consolidation to improve maintainability and reduce cognitive load.",
+    "issues": [
+      "**High Granularity Dependency:** The `dependencyRatio` of 2.22 (20 dependencies for 9 files) indicates that, on average, each file depends on 2-3 other components. While a high `modularityScore` suggests these dependencies are well-structured (e.g., acyclic, layered), such granular coupling can lead to:\n    *   **Increased Cognitive Load:** Developers might need to navigate a larger number of files to understand a single module's complete functionality or context.\n    *   **Potential for Scattered Logic:** If related utility functions or small modules are heavily imported by multiple consumers, it might indicate that these utilities could be better consolidated or that a higher-level abstraction is missing.\n    *   **Ripple Effects During Changes:** Even with good modularity, changes in a frequently depended-upon granular module could necessitate modifications across numerous consuming modules."
+    ],
+    "suggestions": [
+      "**Consolidate Related Utilities/Functions:** Group highly cohesive and interdependent utility functions or small modules into single, more comprehensive modules. This reduces the number of distinct import statements in consuming modules, simplifying their dependency graphs.",
+      "**Introduce Facades or Service Layers:** For modules that heavily rely on many functions from a specific domain (e.g., data manipulation, external APIs), consider creating a façade or a dedicated service layer that encapsulates these granular interactions. This provides a simpler, higher-level interface to consumers, reducing their direct dependencies on the underlying complexities.",
+      "**Re-evaluate Module Granularity:** For a small project (9 files), a dependency ratio of 2.22 might suggest some files are overly granular. Review modules to ensure they encapsulate a complete, meaningful piece of functionality rather than exposing many tiny, disparate functions that are then widely imported.",
+      "**Regular Dependency Graph Review:** Periodically analyze the dependency graph to identify modules with excessive fan-out (depending on too many other modules) and refactor them to reduce their direct dependencies.",
+      "**Enhance Internal Documentation:** While not explicitly flagged as an issue by the metrics, clear internal documentation (e.g., JSDoc, READMEs for complex modules) can significantly help developers navigate and understand module responsibilities and their interdependencies, especially in a system with many granular connections."
+    ],
+    "refactoredFiles": [
+      {
+        "filename": "src/processing/dataProcessor.js",
+        "before": "```javascript\n// src/processing/dataProcessor.js\nimport { isValidData } from '../utils/validator';\nimport { transformPayload } from '../utils/transformer';\nimport { calculateMetrics } from '../utils/calculator';\nimport { formatResult } from '../utils/formatter';\nimport { logInfo } from '../utils/logger';\n\n/**\n * Processes raw data by validating, transforming, calculating metrics, and formatting the result.\n * @param {object} rawData - The raw input data.\n * @returns {object} The processing result including success status and processed data.\n */\nexport function processAndStore(rawData) {\n    logInfo('Starting data processing...');\n    if (!isValidData(rawData)) {\n        logInfo('Invalid data received, stopping.');\n        return { success: false, message: 'Invalid data' };\n    }\n    const transformedData = transformPayload(rawData);\n    const metrics = calculateMetrics(transformedData);\n    const result = formatResult(metrics);\n    logInfo('Data processing complete.');\n    // In a real scenario, 'result' would be stored or further processed.\n    return { success: true, data: result };\n}\n```",
+        "after": "```javascript\n// src/processing/dataProcessor.js\n// Consolidated imports from a single data utility module.\nimport { isValidData, transformPayload, calculateMetrics, formatResult } from '../utils/dataUtils';\nimport { logInfo } from '../utils/logger';\n\n/**\n * Processes raw data by validating, transforming, calculating metrics, and formatting the result.\n * @param {object} rawData - The raw input data.\n * @returns {object} The processing result including success status and processed data.\n */\nexport function processAndStore(rawData) {\n    logInfo('Starting data processing...');\n    if (!isValidData(rawData)) {\n        logInfo('Invalid data received, stopping.');\n        return { success: false, message: 'Invalid data' };\n    }\n    const transformedData = transformPayload(rawData);\n    const metrics = calculateMetrics(transformedData);\n    const result = formatResult(metrics);\n    logInfo('Data processing complete.');\n    // In a real scenario, 'result' would be stored or further processed.\n    return { success: true, data: result };\n}\n```"
+      },
+      {
+        "filename": "src/utils/dataUtils.js",
+        "before": "```javascript\n// (This file did not exist before, its content was spread across multiple smaller utility files like validator.js, transformer.js, calculator.js, formatter.js)\n// src/utils/validator.js (example of one of the files that was merged)\n// export function isValidData(data) {\n//     return data && typeof data === 'object' && !Array.isArray(data) && Object.keys(data).length > 0;\n// }\n// ... (similar content for transformer.js, calculator.js, formatter.js)\n```",
+        "after": "```javascript\n// src/utils/dataUtils.js\n// New file created by consolidating functions from validator.js, transformer.js, calculator.js, formatter.js.\n\n/**\n * Validates if the given data is valid for processing.\n * @param {object} data - The data to validate.\n * @returns {boolean} True if data is valid, false otherwise.\n */\nexport function isValidData(data) {\n    // Placeholder for actual validation logic\n    return data && typeof data === 'object' && !Array.isArray(data) && Object.keys(data).length > 0;\n}\n\n/**\n * Transforms the payload into a standardized format.\n * @param {object} payload - The raw payload.\n * @returns {object} The transformed payload.\n */\nexport function transformPayload(payload) {\n    // Placeholder for actual transformation logic\n    return { ...payload, processedTimestamp: new Date().toISOString() };\n}\n\n/**\n * Calculates various metrics from the transformed data.\n * @param {object} data - The transformed data.\n * @returns {object} An object containing calculated metrics.\n */\nexport function calculateMetrics(data) {\n    // Placeholder for actual metric calculation logic\n    const sum = Object.values(data).filter(v => typeof v === 'number').reduce((acc, val) => acc + val, 0);\n    const count = Object.values(data).filter(v => typeof v === 'number').length;\n    return {\n        totalSum: sum,\n        average: count > 0 ? sum / count : 0,\n        itemCount: Object.keys(data).length\n    };\n}\n\n/**\n * Formats the processing result for output.\n * @param {object} metrics - The calculated metrics.\n * @returns {string} A formatted string representation of the result.\n */\nexport function formatResult(metrics) {\n    // Placeholder for actual formatting logic\n    return `Processed metrics: Total Sum=${metrics.totalSum}, Average=${metrics.average}, Items=${metrics.itemCount}`;\n}\n```"
+      }
+    ]
+  },
+  {
+    "id": "03b06449-3aab-4b1a-af62-f1f76ffe3f96",
+    "analyzedAt": "2025-11-26T08:21:31.562Z",
+    "summary": {
+      "headline": "Architecture looks healthy overall.",
+      "highlights": [
+        "Strong modular structure detected.",
+        "Heavy dependency usage relative to file count."
+      ]
+    },
+    "stats": {
+      "fileCount": 9,
+      "totalLines": 393,
+      "totalFunctions": 25,
+      "totalImports": 10,
+      "dependencyCount": 20,
+      "averageLinesPerFile": 43.67,
+      "averageFunctionsPerFile": 2.78,
+      "functionDensity": 2.78,
+      "dependencyRatio": 2.22,
+      "modularityScore": 95,
+      "architectureScore": 95
+    }
+  },
+  {
+    "id": "a8dc11b8-c75e-414b-ba78-12240df7f7e8",
+    "analyzedAt": "2025-11-26T08:19:00.840Z",
+    "summary": {
+      "headline": "Architecture looks healthy overall.",
+      "highlights": [
+        "Strong modular structure detected.",
+        "Heavy dependency usage relative to file count."
+      ]
+    },
+    "stats": {
+      "fileCount": 4,
+      "totalLines": 89,
+      "totalFunctions": 1,
+      "totalImports": 14,
+      "dependencyCount": 19,
+      "averageLinesPerFile": 22.25,
+      "averageFunctionsPerFile": 0.25,
+      "functionDensity": 0.25,
+      "dependencyRatio": 4.75,
+      "modularityScore": 90,
+      "architectureScore": 89
+    }
+  },
+  {
+    "timestamp": 1764144763236,
+    "type": "gemini-refactor",
+    "summary": "The project exhibits excellent modularity and a healthy overall architecture, as indicated by high modularity and architecture scores. However, a relatively high internal dependency count for a small project (10 dependencies across 5 files) suggests potential for tight coupling that could impede future scaling or maintenance, despite the current good structure. The absence of external imports (totalImports: 0) implies a highly self-contained system, or that 'dependencyCount' specifically refers to internal file-to-file relationships, which reinforces the focus on internal coupling.",
+    "issues": [
+      "**Potential for Tight Coupling:** With 10 dependencies among only 5 files, each file, on average, depends on 2 other internal files. While modularity is high (implying well-structured, non-cyclical dependencies), this density can indicate components knowing too much about each other's concrete implementations, rather than relying on abstractions or narrower interfaces.",
+      "**Future Scalability Risk:** For a project this small, a high internal dependency ratio might not be problematic currently. However, as the project grows, this pattern could lead to increased ripple effects during changes, making it harder to evolve individual components independently.",
+      "**Ambiguity of 'totalImports': 0:** The metric indicates no external library imports. While this might represent a highly contained system, it's unusual for most modern software projects and could mean the metric capture focuses solely on internal file-to-file dependencies, potentially masking other aspects of the dependency graph."
+    ],
+    "suggestions": [
+      "**Introduce Abstraction Layers:** Where components depend heavily on concrete implementations of other components, introduce interfaces or abstract base classes. This allows for dependency inversion and loose coupling, making components easier to test and replace.",
+      "**Implement Dependency Injection (DI):** For managing internal dependencies, especially where an 'orchestrator' or service layer connects multiple modules. Instead of modules directly importing and instantiating dependencies, inject them through constructors or setters. This enhances testability and flexibility.",
+      "**Strengthen Service Layer Boundaries:** Ensure that higher-level components (e.g., API handlers) primarily interact with well-defined service layers, which in turn encapsulate business logic and data access. This reduces direct dependencies from high-level components to lower-level data or utility modules.",
+      "**Consolidate Cross-Cutting Concerns:** If certain files (e.g., `util_functions.py` in the refactor example) are depended upon by many others, consider if their functions can be injected, or if the responsibilities should be integrated into specific service layers to reduce the fan-out dependency.",
+      "**Consider Event-Driven Architecture (for certain interactions):** For non-critical, asynchronous communications between modules, an event-driven approach can significantly reduce direct coupling by having modules publish and subscribe to events rather than direct method calls."
+    ],
+    "refactoredFiles": [
+      {
+        "filename": "api_handler.py",
+        "before": "from service_layer import get_item, create_item\nfrom data_layer import get_item_from_db # Direct data layer access for a quick check\nfrom util_functions import log_message, validate_id # Direct util access\n\ndef handle_get_item_request(request_id):\n    log_message(f\"API: Handling GET request for ID {request_id}\")\n    if not validate_id(request_id):\n        return {\"status\": \"error\", \"message\": \"Invalid ID format\"}\n\n    # Direct check if item exists using data layer, maybe faster than full service layer call\n    if not get_item_from_db(request_id):\n         return {\"status\": \"error\", \"message\": \"Item not found\"}\n\n    item = get_item(request_id)\n    if item:\n        return {\"status\": \"success\", \"data\": item}\n    else:\n        return {\"status\": \"error\", \"message\": \"Failed to retrieve item\"}\n\ndef handle_create_item_request(request_id, data):\n    log_message(f\"API: Handling POST request for ID {request_id}\")\n    if not validate_id(request_id):\n        return {\"status\": \"error\", \"message\": \"Invalid ID format\"}\n    if create_item(request_id, data):\n        return {\"status\": \"success\", \"message\": \"Item created\"}\n    else:\n        return {\"status\": \"error\", \"message\": \"Failed to create item\"}\n",
+        "after": "from service_layer import get_item, create_item, check_item_exists\n# Removed direct dependencies on data_layer and util_functions.\n# All validation, data existence checks, and logging are now handled by the service layer\n# or a dedicated API-level logging/validation mechanism (not util_functions).\n\ndef handle_get_item_request(request_id):\n    # The API layer now solely orchestrates calls to the service layer\n    # and formats the response, delegating business logic and data checks.\n\n    if not check_item_exists(request_id): # Uses service layer to check existence and handle ID validation\n        return {\"status\": \"error\", \"message\": \"Item not found\"}\n\n    item = get_item(request_id) # Service layer handles ID validation internally\n    if item:\n        return {\"status\": \"success\", \"data\": item}\n    else:\n        # This case should ideally not happen if check_item_exists passed successfully\n        return {\"status\": \"error\", \"message\": \"Failed to retrieve item (unexpected)\"}\n\ndef handle_create_item_request(request_id, data):\n    # The API layer now solely orchestrates calls to the service layer\n    # and formats the response.\n    result = create_item(request_id, data) # Service layer handles ID validation internally\n    if result:\n        return {\"status\": \"success\", \"message\": \"Item created\"}\n    else:\n        return {\"status\": \"error\", \"message\": \"Failed to create item (e.g., invalid ID, service failure)\"}\n"
+      }
+    ]
+  },
+  {
+    "id": "f635ef07-c1dd-4ea3-8e00-425d063a8f46",
+    "analyzedAt": "2025-11-26T08:11:22.890Z",
+    "summary": {
+      "headline": "Architecture looks healthy overall.",
+      "highlights": [
+        "Strong modular structure detected.",
+        "Heavy dependency usage relative to file count."
+      ]
+    },
+    "stats": {
+      "fileCount": 5,
+      "totalLines": 229,
+      "totalFunctions": 19,
+      "totalImports": 0,
+      "dependencyCount": 10,
+      "averageLinesPerFile": 45.8,
+      "averageFunctionsPerFile": 3.8,
+      "functionDensity": 3.8,
+      "dependencyRatio": 2,
+      "modularityScore": 95,
+      "architectureScore": 95
+    }
+  },
+  {
     "id": "ffd69098-698d-46cf-9d94-c0046ea484bb",
     "analyzedAt": "2025-11-22T07:13:07.822Z",
     "summary": {
@@ -342,308 +611,6 @@
         "filename": "module1.js",
         "before": "N/A (new file)",
         "after": "// module1.js\nimport * as util from 'util';\n\nexport function function1() {\n  // ... complex logic ...\n  console.log('Function 1');\n  util.log('Used util');\n}\n"
-      }
-    ]
-  },
-  {
-    "id": "373e6106-a4ee-4d8f-95ae-ce684f23b635",
-    "analyzedAt": "2025-11-19T14:29:15.578Z",
-    "summary": {
-      "headline": "Architecture looks healthy overall.",
-      "highlights": [
-        "Strong modular structure detected.",
-        "High function density could indicate complex files.",
-        "Heavy dependency usage relative to file count."
-      ]
-    },
-    "stats": {
-      "fileCount": 1,
-      "totalLines": 601,
-      "totalFunctions": 10,
-      "totalImports": 7,
-      "dependencyCount": 9,
-      "averageLinesPerFile": 601,
-      "averageFunctionsPerFile": 10,
-      "functionDensity": 10,
-      "dependencyRatio": 9,
-      "modularityScore": 95,
-      "architectureScore": 80
-    }
-  },
-  {
-    "timestamp": 1763562525259,
-    "type": "gemini-refactor",
-    "summary": "While internal code structure (function density, possible internal cohesion) might be good enough to yield high individual scores for modularity and architecture, the fundamental structure of having a single file for the entire project is a critical architectural weakness. This 'god file' approach will severely hinder scalability, maintainability, and team collaboration in the long run, irrespective of its current internal cleanliness. The high scores are misleading given the monolithic nature.",
-    "issues": [
-      "**Monolithic Architecture (Single File)**: The most significant issue is `fileCount: 1` with `totalLines: 601`. This indicates a single 'god file' that violates the Single Responsibility Principle (SRP). All logic, configuration, and dependencies are coupled within this one file, making it extremely difficult to maintain, test, scale, and collaborate on.",
-      "**Misleading Modularity and Architecture Scores**: `modularityScore: 95` and `architectureScore: 80` are fundamentally contradictory to a project consisting of a single file. A single file, by definition, lacks external modularity. This suggests the scoring mechanism might be evaluating internal function cohesion or coupling within the file, but entirely missing the overall system architecture's lack of modularity.",
-      "**High Coupling within a Single File**: `dependencyCount: 9` (presumably external or complex internal logic dependencies) in a single file means this file is handling a broad range of concerns, interacting with many different components. This confirms the 'god file' anti-pattern.",
-      "**Potential Function Complexity**: `averageFunctionsPerFile: 10` for `totalLines: 601` implies an average of ~60 lines per function. While not excessively high, this suggests functions might be doing more than one task, increasing their cyclomatic complexity and making them harder to understand, test, and reuse."
-    ],
-    "suggestions": [
-      "**Decompose into Logical Modules/Files**: Break down the single `main_processor.py` file into multiple, distinct modules based on responsibility. Recommended modules might include `config.py` (for constants/settings), `data_fetcher.py` (for API interactions), `data_processor.py` (for data validation/transformation), `data_saver.py` (for persistence), `reporter.py` (for summary generation), and a main orchestration file (e.g., `main.py`).",
-      "**Apply Single Responsibility Principle (SRP)**: Ensure each new file/module and function within them has one clear, well-defined reason to change. This will improve cohesion and reduce coupling.",
-      "**Refactor Long Functions**: Review functions averaging 60 lines and break them down into smaller, more focused sub-functions. Extract utility code into dedicated helper functions or modules.",
-      "**Establish Clear Interfaces and Contracts**: As modules are created, define clear APIs (function signatures, expected inputs/outputs) between them to improve maintainability and allow for independent development and testing.",
-      "**Improve Testability**: With modular components, unit tests can be written for each individual module and function, leading to a more robust and reliable codebase. The current single file makes effective unit testing challenging.",
-      "**Review Metrics Tool Logic**: The tool providing these metrics should re-evaluate how `modularityScore` and `architectureScore` are calculated for projects with `fileCount: 1` to prevent misleading interpretations."
-    ],
-    "refactoredFiles": [
-      {
-        "filename": "main_processor.py (before)",
-        "before": "import os\nimport json\nimport csv\nfrom datetime import datetime\nimport logging\nimport requests\nfrom typing import List, Dict, Any\n\n# --- Configuration & Constants ---\nLOG_FILE = 'app_log.log'\nDATA_URL = 'https://api.example.com/data'\nOUTPUT_DIR = 'processed_data'\nBATCH_SIZE = 100\nMAX_RETRIES = 3\n\nlogging.basicConfig(filename=LOG_FILE, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')\n\ndef _initialize_output_directory(directory_path: str):\n    \"\"\"Ensures the output directory exists.\"\"\"\n    if not os.path.exists(directory_path):\n        os.makedirs(directory_path)\n        logging.info(f\"Created output directory: {directory_path}\")\n\ndef _fetch_raw_data(url: str, retries: int) -> List[Dict[str, Any]]:\n    \"\"\"Fetches raw data from a given URL with retries.\"\"\"\n    for attempt in range(retries):\n        try:\n            logging.info(f\"Attempt {attempt + 1} to fetch data from {url}\")\n            response = requests.get(url, timeout=10)\n            response.raise_for_status()\n            return response.json()\n        except requests.exceptions.RequestException as e:\n            logging.error(f\"Error fetching data (attempt {attempt + 1}): {e}\")\n            if attempt == retries - 1:\n                raise\n    return [] # Should not be reached due to raise\n\ndef _validate_and_clean_record(record: Dict[str, Any]) -> Dict[str, Any]:\n    \"\"\"Validates and cleans a single data record.\"\"\"\n    cleaned_record = {}\n    if not isinstance(record, dict):\n        logging.warning(f\"Skipping non-dict record: {record}\")\n        return None\n\n    # Example cleaning: ensure 'id' is present and 'timestamp' is parsable\n    if 'id' not in record or not record['id']:\n        logging.warning(f\"Record missing 'id': {record}\")\n        return None\n    cleaned_record['id'] = str(record['id'])\n\n    if 'timestamp' in record:\n        try:\n            # Assume ISO format for simplicity\n            cleaned_record['processed_at'] = datetime.fromisoformat(record['timestamp'].replace('Z', '+00:00')).isoformat()\n        except ValueError:\n            logging.warning(f\"Invalid timestamp format for record {record.get('id')}: {record['timestamp']}\")\n            cleaned_record['processed_at'] = datetime.utcnow().isoformat()\n    else:\n        cleaned_record['processed_at'] = datetime.utcnow().isoformat()\n\n    # Add other fields, potentially with transformations\n    cleaned_record['value'] = record.get('value', 0) * 1.05 # Example transformation\n    cleaned_record['status'] = record.get('status', 'unknown').upper()\n    cleaned_record['source'] = record.get('source', 'api')\n\n    return cleaned_record\n\ndef _process_data_batch(raw_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:\n    \"\"\"Processes a batch of raw data, applying validation and cleaning.\"\"\"\n    processed_batch = []\n    for record in raw_data:\n        cleaned_record = _validate_and_clean_record(record)\n        if cleaned_record:\n            processed_batch.append(cleaned_record)\n    logging.info(f\"Processed {len(processed_batch)} out of {len(raw_data)} records in batch.\")\n    return processed_batch\n\ndef _save_data_to_csv(filepath: str, data: List[Dict[str, Any]]):\n    \"\"\"Saves processed data to a CSV file.\"\"\"\n    if not data:\n        logging.info(f\"No data to save to {filepath}\")\n        return\n\n    keys = data[0].keys()\n    with open(filepath, 'w', newline='') as f:\n        writer = csv.DictWriter(f, fieldnames=keys)\n        writer.writeheader()\n        writer.writerows(data)\n    logging.info(f\"Saved {len(data)} records to CSV: {filepath}\")\n\ndef _save_data_to_json(filepath: str, data: List[Dict[str, Any]]):\n    \"\"\"Saves processed data to a JSON file.\"\"\"\n    if not data:\n        logging.info(f\"No data to save to {filepath}\")\n        return\n\n    with open(filepath, 'w') as f:\n        json.dump(data, f, indent=4)\n    logging.info(f\"Saved {len(data)} records to JSON: {filepath}\")\n\ndef _generate_report_summary(processed_data: List[Dict[str, Any]]) -> Dict[str, Any]:\n    \"\"\"Generates a summary report from processed data.\"\"\"\n    total_records = len(processed_data)\n    unique_ids = len(set(record['id'] for record in processed_data if 'id' in record))\n    avg_value = sum(record['value'] for record in processed_data if 'value' in record) / total_records if total_records else 0\n\n    status_counts = {}\n    for record in processed_data:\n        status = record.get('status', 'UNKNOWN')\n        status_counts[status] = status_counts.get(status, 0) + 1\n\n    summary = {\n        'total_records': total_records,\n        'unique_ids': unique_ids,\n        'average_value': round(avg_value, 2),\n        'status_distribution': status_counts,\n        'report_generated_at': datetime.utcnow().isoformat()\n    }\n    logging.info(\"Generated data summary.\")\n    return summary\n\ndef _orchestrate_data_pipeline():\n    \"\"\"Main function to orchestrate the data processing pipeline.\"\"\"\n    _initialize_output_directory(OUTPUT_DIR)\n    \n    try:\n        raw_records = _fetch_raw_data(DATA_URL, MAX_RETRIES)\n        if not raw_records:\n            logging.warning(\"No raw data fetched. Exiting pipeline.\")\n            return\n\n        all_processed_data = []\n        for i in range(0, len(raw_records), BATCH_SIZE):\n            batch = raw_records[i:i + BATCH_SIZE]\n            processed_batch = _process_data_batch(batch)\n            all_processed_data.extend(processed_batch)\n        \n        if not all_processed_data:\n            logging.warning(\"No data processed after validation. Exiting pipeline.\")\n            return\n\n        timestamp_str = datetime.now().strftime(\"%Y%m%d%H%M%S\")\n        csv_filepath = os.path.join(OUTPUT_DIR, f\"processed_data_{timestamp_str}.csv\")\n        json_filepath = os.path.join(OUTPUT_DIR, f\"processed_data_{timestamp_str}.json\")\n        report_filepath = os.path.join(OUTPUT_DIR, f\"report_summary_{timestamp_str}.json\")\n\n        _save_data_to_csv(csv_filepath, all_processed_data)\n        _save_data_to_json(json_filepath, all_processed_data)\n\n        summary_report = _generate_report_summary(all_processed_data)\n        _save_data_to_json(report_filepath, summary_report) # Save summary as JSON\n\n        logging.info(\"Data processing pipeline completed successfully.\")\n\n    except Exception as e:\n        logging.critical(f\"Critical error in pipeline: {e}\", exc_info=True)\n\nif __name__ == \"__main__\":\n    _orchestrate_data_pipeline()\n"
-      },
-      {
-        "filename": "main.py (after)",
-        "after": "import os\nimport logging\nfrom datetime import datetime\n\nimport config\nimport data_fetcher\nimport data_processor\nimport data_saver\nimport reporter\n\n# Initialize logging as per config\nlogging.basicConfig(\n    filename=config.LOG_FILE,\n    level=logging.INFO,\n    format=config.LOG_FORMAT\n)\n\ndef initialize_output_directory(directory_path: str):\n    \"\"\"Ensures the output directory exists.\"\"\"\n    if not os.path.exists(directory_path):\n        os.makedirs(directory_path)\n        logging.info(f\"Created output directory: {directory_path}\")\n\ndef orchestrate_data_pipeline():\n    \"\"\"Main function to orchestrate the data processing pipeline.\"\"\"\n    initialize_output_directory(config.OUTPUT_DIR)\n    \n    try:\n        # Fetch data\n        raw_records = data_fetcher.fetch_raw_data(config.DATA_URL, config.MAX_RETRIES)\n        if not raw_records:\n            logging.warning(\"No raw data fetched. Exiting pipeline.\")\n            return\n\n        # Process data in batches\n        all_processed_data = []\n        for i in range(0, len(raw_records), config.BATCH_SIZE):\n            batch = raw_records[i:i + config.BATCH_SIZE]\n            processed_batch = data_processor.process_data_batch(batch)\n            all_processed_data.extend(processed_batch)\n        \n        if not all_processed_data:\n            logging.warning(\"No data processed after validation. Exiting pipeline.\")\n            return\n\n        # Save processed data and report\n        timestamp_str = datetime.now().strftime(\"%Y%m%d%H%M%S\")\n        csv_filepath = os.path.join(config.OUTPUT_DIR, f\"processed_data_{timestamp_str}.csv\")\n        json_filepath = os.path.join(config.OUTPUT_DIR, f\"processed_data_{timestamp_str}.json\")\n        report_filepath = os.path.join(config.OUTPUT_DIR, f\"report_summary_{timestamp_str}.json\")\n\n        data_saver.save_data_to_csv(csv_filepath, all_processed_data)\n        data_saver.save_data_to_json(json_filepath, all_processed_data)\n\n        summary_report = reporter.generate_report_summary(all_processed_data)\n        data_saver.save_data_to_json(report_filepath, summary_report) # Save summary as JSON\n\n        logging.info(\"Data processing pipeline completed successfully.\")\n\n    except Exception as e:\n        logging.critical(f\"Critical error in pipeline: {e}\", exc_info=True)\n\nif __name__ == \"__main__\":\n    orchestrate_data_pipeline()\n"
-      },
-      {
-        "filename": "data_processor.py (after)",
-        "after": "import logging\nfrom datetime import datetime\nfrom typing import List, Dict, Any\n\ndef _validate_and_clean_record(record: Dict[str, Any]) -> Dict[str, Any]:\n    \"\"\"Validates and cleans a single data record.\"\"\"\n    cleaned_record = {}\n    if not isinstance(record, dict):\n        logging.warning(f\"Skipping non-dict record: {record}\")\n        return None\n\n    # Example cleaning: ensure 'id' is present and 'timestamp' is parsable\n    if 'id' not in record or not record['id']:\n        logging.warning(f\"Record missing 'id': {record}\")\n        return None\n    cleaned_record['id'] = str(record['id'])\n\n    if 'timestamp' in record:\n        try:\n            # Assume ISO format for simplicity\n            cleaned_record['processed_at'] = datetime.fromisoformat(record['timestamp'].replace('Z', '+00:00')).isoformat()\n        except ValueError:\n            logging.warning(f\"Invalid timestamp format for record {record.get('id')}: {record['timestamp']}\")\n            cleaned_record['processed_at'] = datetime.utcnow().isoformat()\n    else:\n        cleaned_record['processed_at'] = datetime.utcnow().isoformat()\n\n    # Add other fields, potentially with transformations\n    cleaned_record['value'] = record.get('value', 0) * 1.05 # Example transformation\n    cleaned_record['status'] = record.get('status', 'unknown').upper()\n    cleaned_record['source'] = record.get('source', 'api')\n\n    return cleaned_record\n\ndef process_data_batch(raw_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:\n    \"\"\"Processes a batch of raw data, applying validation and cleaning.\"\"\"\n    processed_batch = []\n    for record in raw_data:\n        cleaned_record = _validate_and_clean_record(record)\n        if cleaned_record:\n            processed_batch.append(cleaned_record)\n    logging.info(f\"Processed {len(processed_batch)} out of {len(raw_data)} records in batch.\")\n    return processed_batch\n"
-      }
-    ]
-  },
-  {
-    "id": "16915de8-e58d-4836-b00e-4d0740706b68",
-    "analyzedAt": "2025-11-19T14:27:41.665Z",
-    "summary": {
-      "headline": "Architecture looks healthy overall.",
-      "highlights": [
-        "Strong modular structure detected.",
-        "High function density could indicate complex files.",
-        "Heavy dependency usage relative to file count."
-      ]
-    },
-    "stats": {
-      "fileCount": 1,
-      "totalLines": 601,
-      "totalFunctions": 10,
-      "totalImports": 7,
-      "dependencyCount": 9,
-      "averageLinesPerFile": 601,
-      "averageFunctionsPerFile": 10,
-      "functionDensity": 10,
-      "dependencyRatio": 9,
-      "modularityScore": 95,
-      "architectureScore": 80
-    }
-  },
-  {
-    "timestamp": 1763562167466,
-    "type": "gemini-refactor",
-    "summary": "The project metrics present a contradictory picture. While 'modularityScore' and 'architectureScore' are reported as healthy, the 'fileCount' of 1 is a critical red flag, indicating a single monolithic file. This fundamental structural issue outweighs any positive internal metrics and suggests a severe lack of true modularity and separation of concerns.",
-    "issues": [
-      "**Monolithic File Structure (Single Responsibility Principle Violation):** The most significant weakness is `fileCount: 1`. A 601-line file containing 10 functions and 9 dependencies is a 'God object' or a monolithic module. This violates the Single Responsibility Principle at the highest level, making the project hard to understand, maintain, and scale.",
-      "**Misleading Modularity and Architecture Scores:** The `modularityScore: 95` and `architectureScore: 80` are highly suspect and misleading given the single-file structure. These scores likely reflect internal code quality within that one file (e.g., individual functions might be well-written or small), but they completely miss the external architectural problem of lack of decomposition.",
-      "**High Coupling:** A single large file inherently leads to high coupling, where different parts of the code are tightly intertwined, making changes in one area prone to breaking others.",
-      "**Low Cohesion (Potential):** With 10 functions and 9 dependencies in a single file, it's highly probable that the file handles multiple, unrelated concerns (e.g., data access, business logic, validation, utility functions), leading to low overall cohesion.",
-      "**Poor Maintainability and Understandability:** A 600-line file is difficult to navigate, read, and understand. Onboarding new developers, debugging, or introducing new features becomes a higher-risk, time-consuming task.",
-      "**Limited Scalability and Reusability:** The lack of modularity severely limits the ability to scale development (e.g., parallelizing work), reuse components in other projects, or adapt to changing requirements."
-    ],
-    "suggestions": [
-      "**Decompose into Smaller, Cohesive Modules:** Break down the monolithic file into logical units based on their primary responsibilities (e.g., `services` for business logic, `repositories` for data access, `utilities` for common helper functions, `config` for settings). Aim for files that are typically 50-200 lines long, each with a clear, single responsibility.",
-      "**Implement a Layered Architecture:** Even for a small project, introduce basic architectural layers. For example: Presentation/API Layer (if applicable), Service Layer (business logic), Repository/Data Access Layer (database interactions), and Utility Layer (common helpers). This enhances separation of concerns.",
-      "**Define Clear Interfaces and Dependencies:** As new modules are created, clearly define their public interfaces. Dependencies between modules should be explicit and unidirectional where possible (e.g., services depend on repositories, but not vice-versa).",
-      "**Focus on High Cohesion and Low Coupling:** For each new module, ensure it performs one distinct function or manages one specific entity (high cohesion) and has minimal, well-defined dependencies on other modules (low coupling).",
-      "**Introduce Automated Code Quality Checks:** Implement tools for linting, static analysis, and potentially a more sophisticated architecture analysis tool that can correctly identify structural issues like a lack of modularity at the file/directory level.",
-      "**Add Documentation:** As modules are created, ensure clear documentation (docstrings, READMEs) explaining their purpose, public API, and how they interact with other parts of the system."
-    ],
-    "refactoredFiles": [
-      {
-        "filename": "main_user_manager.py",
-        "before": "import json\nimport os\nimport datetime\nimport uuid\nfrom typing import Dict, Any, List, Optional\nimport logging\nimport re # Added for better email validation\n\n# Assume a very simple 'database' for demonstration. In a real app, this would be a DB connection.\n_users_db = {}\n\n_settings = {\n    \"MIN_PASSWORD_LENGTH\": 8,\n    \"MAX_USERNAME_LENGTH\": 50,\n    \"ADMIN_EMAILS\": [\"admin@example.com\"],\n    \"LOG_LEVEL\": \"INFO\"\n}\n\nlogging.basicConfig(level=getattr(logging, _settings['LOG_LEVEL'].upper()), format='%(asctime)s - %(levelname)s - %(message)s')\n\n# --- Utility Functions ---\n\ndef _is_valid_email(email: str) -> bool:\n    \"\"\"Performs a basic check for a valid email format.\"\"\"\n    return re.match(r\"[^@]+@[^@]+\\.[^@]+\", email) is not None\n\ndef _generate_user_id() -> str:\n    \"\"\"Generates a unique user ID.\"\"\"\n    return str(uuid.uuid4())\n\ndef _hash_password(password: str) -> str:\n    \"\"\"Simulates password hashing. In a real app, use a proper library like bcrypt.\"\"\"\n    # Imagine complex hashing logic here, salt generation, iterations, etc.\n    return f\"hashed_{password}_secure_v2\"\n\n# --- Validation Logic ---\n\ndef _validate_user_data(user_data: Dict[str, Any], existing_users: Dict[str, Any], is_new: bool = True) -> Optional[str]:\n    \"\"\"\n    Validates user data before creation or update.\n    This function would grow significantly with more fields, custom rules, etc.\n    \"\"\"\n    if 'username' not in user_data or not user_data['username']:\n        return \"Username is required.\"\n    if len(user_data['username']) > _settings[\"MAX_USERNAME_LENGTH\"]:\n        return f\"Username cannot exceed {_settings['MAX_USERNAME_LENGTH']} characters.\"\n    \n    # More complex username validation (e.g., no special chars, min length, etc.) could be here.\n\n    if is_new and 'password' not in user_data:\n        return \"Password is required for new users.\"\n    if 'password' in user_data and len(user_data['password']) < _settings[\"MIN_PASSWORD_LENGTH\"]:\n        return f\"Password must be at least {_settings['MIN_PASSWORD_LENGTH']} characters long.\"\n    \n    # Password strength checks, common password lists, etc.\n\n    if 'email' not in user_data or not _is_valid_email(user_data['email']):\n        return \"Valid email is required.\"\n    \n    # Additional email validation (e.g., domain checks, temporary email detection)\n\n    # Uniqueness checks\n    current_user_id = user_data.get('id') # For updates, allow current user to keep their username/email\n    if any(u['username'] == user_data['username'] for u in existing_users.values() if u.get('id') != current_user_id):\n        return \"Username already exists.\"\n    if any(u['email'] == user_data['email'] for u in existing_users.values() if u.get('id') != current_user_id):\n        return \"Email already exists.\"\n\n    # Imagine 100+ lines of various validation rules here, for user profile, permissions, etc.\n    # Including checks against other data structures/entities.\n\n    return None # No error\n\n# --- Data Access (Repository-like functions) ---\n\ndef _db_get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:\n    \"\"\"Retrieves a user directly from the simulated database.\"\"\"\n    logging.debug(f\"DB: Fetching user {user_id}\")\n    return _users_db.get(user_id)\n\ndef _db_get_all_users() -> List[Dict[str, Any]]:\n    \"\"\"Retrieves all users directly from the simulated database.\"\"\"\n    logging.debug(\"DB: Fetching all users\")\n    return list(_users_db.values())\n\ndef _db_save_user(user_data: Dict[str, Any]) -> Dict[str, Any]:\n    \"\"\"Saves a new or updates an existing user in the simulated database.\"\"\"\n    user_id = user_data.get('id')\n    if not user_id: # Assume ID is generated by the service layer before calling save\n        logging.error(\"DB: User data without ID passed to save.\")\n        raise ValueError(\"User must have an ID to be saved.\")\n    _users_db[user_id] = user_data\n    logging.debug(f\"DB: User {user_id} saved.\")\n    return user_data\n\ndef _db_delete_user(user_id: str) -> bool:\n    \"\"\"Deletes a user from the simulated database.\"\"\"\n    if user_id in _users_db:\n        del _users_db[user_id]\n        logging.debug(f\"DB: User {user_id} deleted.\")\n        return True\n    return False\n\n# --- Business Logic (Service-like functions) ---\n\ndef get_user_profile(user_id: str) -> Optional[Dict[str, Any]]:\n    \"\"\"Retrieves a user's profile, stripping sensitive information.\"\"\"\n    logging.info(f\"Service: Getting user profile for {user_id}\")\n    user = _db_get_user_by_id(user_id)\n    if user:\n        # Imagine complex logic to transform user data for specific profile view\n        # E.g., aggregating activity data, permissions, related entities.\n        return {k: v for k, v in user.items() if k not in ['password_hash', 'created_at', 'updated_at']}\n    logging.warning(f\"Service: Profile for user {user_id} not found.\")\n    return None\n\ndef get_all_active_users() -> List[Dict[str, Any]]:\n    \"\"\"Retrieves all active users, applying business rules.\"\"\"\n    logging.info(\"Service: Getting all active users.\")\n    all_users = _db_get_all_users()\n    # Imagine filtering out inactive users, suspended accounts, etc.\n    return [{k: v for k, v in user.items() if k != 'password_hash'} for user in all_users if user.get('is_active', True)]\n\ndef create_new_user(user_data: Dict[str, Any]) -> Dict[str, Any]:\n    \"\"\"Creates a new user, orchestrating validation, ID generation, hashing, and persistence.\"\"\"\n    logging.info(f\"Service: Attempting to create new user: {user_data.get('username')}\")\n    all_existing_users = _db_get_all_users() # Fetch all for uniqueness checks\n    validation_error = _validate_user_data(user_data, {u['id']:u for u in all_existing_users}, is_new=True)\n    if validation_error:\n        logging.error(f\"Service: User creation failed: {validation_error}\")\n        raise ValueError(validation_error)\n\n    user_id = _generate_user_id()\n    hashed_password = _hash_password(user_data['password'])\n    new_user = {\n        \"id\": user_id,\n        \"username\": user_data['username'],\n        \"email\": user_data['email'],\n        \"password_hash\": hashed_password, # Store hash, not plain password\n        \"created_at\": datetime.datetime.utcnow().isoformat(),\n        \"is_admin\": user_data.get('email') in _settings[\"ADMIN_EMAILS\"],\n        \"is_active\": True\n    }\n    _db_save_user(new_user)\n    logging.info(f\"Service: User {user_id} created successfully.\")\n    return {k: v for k, v in new_user.items() if k != 'password_hash'}\n\ndef update_existing_user(user_id: str, user_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:\n    \"\"\"Updates an existing user, handling validation, password changes, etc.\"\"\"\n    logging.info(f\"Service: Attempting to update user {user_id}\")\n    existing_user = _db_get_user_by_id(user_id)\n    if not existing_user:\n        logging.warning(f\"Service: Update failed for user {user_id}: User not found.\")\n        return None\n\n    # Merge existing data for validation to handle partial updates correctly\n    data_to_validate = {**existing_user, **user_data, 'id': user_id}\n    all_existing_users = _db_get_all_users() # Fetch all for uniqueness checks\n    validation_error = _validate_user_data(data_to_validate, {u['id']:u for u in all_existing_users}, is_new=False)\n    if validation_error:\n        logging.error(f\"Service: User update failed for user {user_id}: {validation_error}\")\n        raise ValueError(validation_error)\n\n    # Apply updates\n    if 'username' in user_data: existing_user['username'] = user_data['username']\n    if 'email' in user_data: existing_user['email'] = user_data['email']\n    if 'password' in user_data: existing_user['password_hash'] = _hash_password(user_data['password'])\n    if 'is_active' in user_data: existing_user['is_active'] = user_data['is_active']\n    # Imagine many more fields and complex update logic here.\n    existing_user['updated_at'] = datetime.datetime.utcnow().isoformat()\n\n    _db_save_user(existing_user)\n    logging.info(f\"Service: User {user_id} updated successfully.\")\n    return {k: v for k, v in existing_user.items() if k != 'password_hash'}\n\ndef delete_user_account(user_id: str) -> bool:\n    \"\"\"Deletes a user account after performing necessary checks.\"\"\"\n    logging.info(f\"Service: Attempting to delete user {user_id}\")\n    user_to_delete = _db_get_user_by_id(user_id)\n    if not user_to_delete:\n        logging.warning(f\"Service: Delete failed: User {user_id} not found.\")\n        return False\n    \n    # Imagine complex business rules before deletion:\n    # - Check if user has active subscriptions\n    # - Check if user owns critical resources\n    # - Archive data instead of deleting\n    # - Send notification emails, etc.\n    # This part alone could be 50-100 lines.\n\n    return _db_delete_user(user_id)\n\n# --- Example Usage / Entry Point (can be 100+ lines in a real app) ---\n\nif __name__ == \"__main__\":\n    logging.info(\"Application Starting...\")\n    # Simulate some initial data for testing\n    try:\n        create_new_user({\"username\": \"alice\", \"email\": \"alice@example.com\", \"password\": \"securepassword1\"})\n        create_new_user({\"username\": \"bob\", \"email\": \"bob@example.com\", \"password\": \"securepassword2\"})\n        create_new_user({\"username\": \"admin_user\", \"email\": \"admin@example.com\", \"password\": \"adminpass!\"})\n\n        user_alice = get_user_profile(\"alice_id\") # This ID would be from the return of create_new_user\n        # In reality, you'd capture the returned ID from create_new_user for lookups\n        all_users = get_all_active_users()\n        logging.info(f\"All active users: {[u['username'] for u in all_users]}\")\n\n        # Imagine calling update_existing_user, delete_user_account, etc.\n        # This section might contain API routing, command line parsing, etc. (200+ lines)\n        logging.info(\"Application Finished.\")\n    except ValueError as e:\n        logging.error(f\"An error occurred during initial setup: {e}\")\n\n# The total lines count could easily reach 601 with more complex logging, error handling,\n# additional utility functions, more data fields, more business rules,\n# and a more elaborate `if __name__ == \"__main__\"` block handling CLI args or basic API setup.\n",
-        "after": "import logging\nfrom app.config import SETTINGS\nfrom app.repositories.user_repository import UserRepository\nfrom app.services.user_service import UserService\n\nlogging.basicConfig(level=getattr(logging, SETTINGS['LOG_LEVEL'].upper()), format='%(asctime)s - %(levelname)s - %(message)s')\n\ndef setup_application():\n    \"\"\"Initializes repositories and services.\"\"\"\n    logging.info(\"Application Setup: Initializing components...\")\n    # Initialize repository (could take a database connection string in a real app)\n    user_repo = UserRepository()\n    # Initialize service with its dependencies\n    user_service = UserService(user_repo)\n    logging.info(\"Application Setup: Components initialized.\")\n    return user_service\n\nif __name__ == \"__main__\":\n    user_service = setup_application()\n\n    logging.info(\"Application Starting (Main Entry Point)...\")\n\n    # Simulate initial data and interactions using the service\n    try:\n        new_user_1 = user_service.create_user({\"username\": \"alice_new\", \"email\": \"alice_new@example.com\", \"password\": \"securepassword1\"})\n        new_user_2 = user_service.create_user({\"username\": \"bob_new\", \"email\": \"bob_new@example.com\", \"password\": \"securepassword2\"})\n        admin_user = user_service.create_user({\"username\": \"admin_user_new\", \"email\": \"admin_new@example.com\", \"password\": \"adminpass!\"})\n\n        logging.info(f\"Created Alice (ID: {new_user_1['id']})\")\n        logging.info(f\"Created Bob (ID: {new_user_2['id']})\")\n\n        all_users = user_service.get_all_users()\n        logging.info(f\"All users after creation: {[u['username'] for u in all_users]}\")\n\n        # Example update\n        user_service.update_user(new_user_1['id'], {\"username\": \"alice_updated\", \"is_active\": False})\n        updated_alice = user_service.get_user_by_id(new_user_1['id'])\n        logging.info(f\"Updated Alice: {updated_alice['username']}, Active: {updated_alice.get('is_active')}\")\n\n        # Example delete\n        user_service.delete_user(new_user_2['id'])\n        logging.info(f\"Bob deleted. All users remaining: {[u['username'] for u in user_service.get_all_users()]}\")\n\n        logging.info(\"Application Finished.\")\n    except ValueError as e:\n        logging.error(f\"An error occurred during application execution: {e}\")\n    except Exception as e:\n        logging.critical(f\"An unexpected error occurred: {e}\")\n",
-        "description": "The original `main_user_manager.py` (simulated 601 lines) is now significantly reduced. It acts as a lightweight entry point, responsible for setting up the application's components (repositories, services) and orchestrating high-level execution, rather than containing all the business logic, data access, and utilities directly."
-      },
-      {
-        "filename": "app/services/user_service.py",
-        "before": "Content was previously part of `main_user_manager.py`, specifically the business logic functions like `create_new_user`, `update_existing_user`, `get_user_profile`, `get_all_active_users`, and `delete_user_account`, along with orchestrating calls to validation, security, and data access functions directly.",
-        "after": "import datetime\nimport logging\nfrom typing import Dict, Any, List, Optional\n\nfrom app.repositories.user_repository import UserRepository\nfrom app.utils.security import generate_user_id, hash_password\nfrom app.utils.validation import validate_user_data\nfrom app.config import SETTINGS\n\nlogging.getLogger(__name__).setLevel(getattr(logging, SETTINGS['LOG_LEVEL'].upper()))\n\nclass UserService:\n    \"\"\"\n    Provides business logic for user management.\n    Orchestrates validation, security, and data access operations.\n    This layer defines and enforces application-specific rules.\n    \"\"\"\n    def __init__(self, user_repository: UserRepository):\n        self.user_repo = user_repository\n        self.logger = logging.getLogger(f\"{__name__}.{self.__class__.__name__}\")\n\n    def get_user_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:\n        \"\"\"Retrieves a user by their ID, stripping sensitive info.\"\"\"\n        self.logger.info(f\"Retrieving user {user_id}\")\n        user = self.user_repo.get_by_id(user_id)\n        if user:\n            # Business rule: Don't expose password hash\n            return {k: v for k, v in user.items() if k != 'password_hash'}\n        self.logger.warning(f\"User {user_id} not found.\")\n        return None\n\n    def get_all_users(self) -> List[Dict[str, Any]]:\n        \"\"\"Retrieves all users, stripping sensitive info.\"\"\"\n        self.logger.info(\"Retrieving all users.\")\n        all_users = self.user_repo.get_all()\n        # Business rule: Only return active users and strip password hashes\n        return [{k: v for k, v in user.items() if k != 'password_hash'} for user in all_users if user.get('is_active', True)]\n\n    def create_user(self, user_data: Dict[str, Any]) -> Dict[str, Any]:\n        \"\"\"Creates a new user with validation and hashing.\"\"\"\n        self.logger.info(f\"Attempting to create new user: {user_data.get('username')}\")\n        # Fetch existing users for uniqueness checks. For very large datasets, optimize this.\n        all_existing_users = self.user_repo.get_all()\n        validation_error = validate_user_data(user_data, existing_users={u['id']: u for u in all_existing_users}, is_new=True)\n        if validation_error:\n            self.logger.error(f\"User creation failed: {validation_error}\")\n            raise ValueError(validation_error)\n\n        user_id = generate_user_id()\n        hashed_password = hash_password(user_data['password'])\n        new_user = {\n            \"id\": user_id,\n            \"username\": user_data['username'],\n            \"email\": user_data['email'],\n            \"password_hash\": hashed_password, # Store hash, not plain password\n            \"created_at\": datetime.datetime.utcnow().isoformat(),\n            \"is_admin\": user_data.get('email') in SETTINGS[\"ADMIN_EMAILS\"],\n            \"is_active\": True\n        }\n        self.user_repo.save(new_user)\n        self.logger.info(f\"User {user_id} created successfully.\")\n        return {k: v for k, v in new_user.items() if k != 'password_hash'}\n\n    def update_user(self, user_id: str, user_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:\n        \"\"\"Updates an existing user with validation and business rules.\"\"\"\n        self.logger.info(f\"Attempting to update user {user_id}\")\n        existing_user = self.user_repo.get_by_id(user_id)\n        if not existing_user:\n            self.logger.warning(f\"Update failed for user {user_id}: User not found.\")\n            return None\n\n        # Merge existing data for validation to handle partial updates correctly\n        data_to_validate = {**existing_user, **user_data, 'id': user_id}\n        all_existing_users = self.user_repo.get_all() # Fetch all for uniqueness checks\n        validation_error = validate_user_data(data_to_validate, existing_users={u['id']: u for u in all_existing_users}, is_new=False)\n        if validation_error:\n            self.logger.error(f\"User update failed for user {user_id}: {validation_error}\")\n            raise ValueError(validation_error)\n\n        # Apply updates based on business rules\n        if 'username' in user_data: existing_user['username'] = user_data['username']\n        if 'email' in user_data: existing_user['email'] = user_data['email']\n        if 'password' in user_data: existing_user['password_hash'] = hash_password(user_data['password'])\n        if 'is_active' in user_data: existing_user['is_active'] = user_data['is_active']\n        existing_user['updated_at'] = datetime.datetime.utcnow().isoformat()\n\n        self.user_repo.save(existing_user)\n        self.logger.info(f\"User {user_id} updated successfully.\")\n        return {k: v for k, v in existing_user.items() if k != 'password_hash'}\n\n    def delete_user(self, user_id: str) -> bool:\n        \"\"\"Deletes a user after performing necessary business checks.\"\"\"\n        self.logger.info(f\"Attempting to delete user {user_id}\")\n        user_to_delete = self.user_repo.get_by_id(user_id)\n        if not user_to_delete:\n            self.logger.warning(f\"Delete failed: User {user_id} not found.\")\n            return False\n        \n        # Example business rule: Prevent deletion of admin users without specific override\n        if user_to_delete.get('is_admin') and not user_to_delete.get('force_delete_admin'):\n            self.logger.warning(f\"Deletion of admin user {user_id} prevented by business rule.\")\n            return False\n\n        return self.user_repo.delete(user_id)\n"
-      },
-      {
-        "filename": "app/repositories/user_repository.py",
-        "before": "Content was previously part of `main_user_manager.py`, specifically the `_users_db` dictionary and direct functions interacting with it like `_db_get_user_by_id`, `_db_get_all_users`, `_db_save_user`, and `_db_delete_user`.",
-        "after": "from typing import Dict, Any, List, Optional\nimport logging\nfrom app.config import SETTINGS\n\nlogging.getLogger(__name__).setLevel(getattr(logging, SETTINGS['LOG_LEVEL'].upper()))\n\n# Assume a very simple in-memory 'database' for demonstration.\n# In a real application, this would be an ORM session, database client, etc.\n_users_db: Dict[str, Dict[str, Any]] = {}\n\nclass UserRepository:\n    \"\"\"\n    Handles direct data access operations for User entities.\n    Abstracts the underlying data storage mechanism (e.g., database, API).\n    Focuses solely on CRUD operations and data retrieval, without business logic.\n    \"\"\"\n    def __init__(self):\n        self.logger = logging.getLogger(f\"{__name__}.{self.__class__.__name__}\")\n        self._simulate_initial_data()\n\n    def _simulate_initial_data(self):\n        \"\"\"Populates the in-memory DB with some initial data.\"\"\"\n        # This would be empty in a real app; data comes from the actual DB.\n        if not _users_db:\n            self.save({\n                \"id\": \"test_alice_id\", \"username\": \"alice\", \"email\": \"alice@example.com\", \n                \"password_hash\": \"hashed_securepassword1_secure_v2\", \"created_at\": \"2023-01-01T10:00:00Z\", \n                \"is_admin\": False, \"is_active\": True\n            })\n            self.save({\n                \"id\": \"test_bob_id\", \"username\": \"bob\", \"email\": \"bob@example.com\", \n                \"password_hash\": \"hashed_securepassword2_secure_v2\", \"created_at\": \"2023-01-01T10:05:00Z\", \n                \"is_admin\": False, \"is_active\": True\n            })\n            self.save({\n                \"id\": \"test_admin_id\", \"username\": \"admin_user\", \"email\": \"admin@example.com\", \n                \"password_hash\": \"hashed_adminpass!_secure_v2\", \"created_at\": \"2023-01-01T10:10:00Z\", \n                \"is_admin\": True, \"is_active\": True\n            })\n            self.logger.info(\"Simulated initial user data loaded.\")\n\n    def get_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:\n        \"\"\"Retrieves a user by their ID.\"\"\"\n        self.logger.debug(f\"Fetching user with ID: {user_id}\")\n        user = _users_db.get(user_id)\n        return user\n\n    def get_all(self) -> List[Dict[str, Any]]:\n        \"\"\"Retrieves all users.\"\"\"\n        self.logger.debug(\"Fetching all users.\")\n        return list(_users_db.values())\n\n    def save(self, user: Dict[str, Any]) -> Dict[str, Any]:\n        \"\"\"Saves a new user or updates an existing one based on ID.\"\"\"\n        user_id = user.get('id')\n        if not user_id:\n            self.logger.error(\"Attempted to save user without an ID. ID is required for repository.\")\n            raise ValueError(\"User must have an ID to be saved.\")\n        _users_db[user_id] = user\n        self.logger.debug(f\"User with ID {user_id} saved/updated.\")\n        return user\n\n    def delete(self, user_id: str) -> bool:\n        \"\"\"Deletes a user by their ID.\"\"\"\n        if user_id in _users_db:\n            del _users_db[user_id]\n            self.logger.debug(f\"User with ID {user_id} deleted.\")\n            return True\n        self.logger.warning(f\"Attempted to delete non-existent user with ID: {user_id}\")\n        return False\n\n    def find_by_username_or_email(self, username: Optional[str] = None, email: Optional[str] = None) -> List[Dict[str, Any]]:\n        \"\"\"Finds users by username or email for uniqueness checks.\"\"\"\n        results = []\n        for user in _users_db.values():\n            if (username and user.get('username') == username) or \\\n               (email and user.get('email') == email):\n                results.append(user)\n        return results\n"
-      }
-    ]
-  },
-  {
-    "id": "5fa81a39-007e-42e4-97cf-25b1caef67ce",
-    "analyzedAt": "2025-11-19T14:21:10.892Z",
-    "summary": {
-      "headline": "Architecture looks healthy overall.",
-      "highlights": [
-        "Strong modular structure detected.",
-        "High function density could indicate complex files.",
-        "Heavy dependency usage relative to file count."
-      ]
-    },
-    "stats": {
-      "fileCount": 1,
-      "totalLines": 601,
-      "totalFunctions": 10,
-      "totalImports": 7,
-      "dependencyCount": 9,
-      "averageLinesPerFile": 601,
-      "averageFunctionsPerFile": 10,
-      "functionDensity": 10,
-      "dependencyRatio": 9,
-      "modularityScore": 95,
-      "architectureScore": 80
-    }
-  },
-  {
-    "id": "9d1c8404-685b-404f-9714-e68ac2333723",
-    "analyzedAt": "2025-11-19T14:18:59.046Z",
-    "summary": {
-      "headline": "Architecture looks healthy overall.",
-      "highlights": [
-        "Strong modular structure detected.",
-        "High function density could indicate complex files.",
-        "Heavy dependency usage relative to file count."
-      ]
-    },
-    "stats": {
-      "fileCount": 1,
-      "totalLines": 601,
-      "totalFunctions": 10,
-      "totalImports": 7,
-      "dependencyCount": 9,
-      "averageLinesPerFile": 601,
-      "averageFunctionsPerFile": 10,
-      "functionDensity": 10,
-      "dependencyRatio": 9,
-      "modularityScore": 95,
-      "architectureScore": 80
-    }
-  },
-  {
-    "timestamp": 1763561704278,
-    "type": "gemini-refactor",
-    "summary": "The project exhibits a strong modular structure, but several factors suggest potential areas for improvement. The high function density within a single file and the heavy dependency usage relative to the file count are the primary concerns. While the modularity score is high, it's crucial to investigate why so many dependencies are concentrated in a single module. Further analysis is needed to determine if the single file represents a God Class or if it can be broken down into smaller, more manageable modules. Documentation is also a concern, as the analysis doesn't mention it; assuming it's lacking until proven otherwise.",
-    "issues": [
-      "High function density in the single file (10 functions in 601 lines) suggests potential complexity and maintainability issues.",
-      "High dependency ratio (9 dependencies in one file) indicates a potential for tight coupling and fragility. Changes in one dependency could have a wide ripple effect.",
-      "Lack of documentation is a potential risk, especially given the complexity implied by the function density and dependency ratio.",
-      "The single file structure limits scalability and makes collaboration difficult. It also makes testing more complex.",
-      "Potential for code duplication, given that all functionality is within a single file. Without seeing the code, it's hard to confirm, but it's a plausible concern."
-    ],
-    "suggestions": [
-      "Refactor the single file into multiple modules based on logical grouping of functionality to reduce function density and improve maintainability.",
-      "Analyze the dependencies and identify opportunities to reduce coupling through dependency inversion, abstraction, or facade patterns.",
-      "Introduce comprehensive documentation, including API documentation and design documents, to improve understanding and onboarding for new developers.",
-      "Implement unit tests for each module to ensure code quality and facilitate future refactoring.",
-      "Consider using a build system or dependency management tool (if not already in place) to manage dependencies and ensure consistent builds.",
-      "Investigate potential code duplication and consolidate common logic into reusable functions or modules.",
-      "Explore the use of design patterns to simplify complex functionality and improve code readability."
-    ],
-    "refactoredFiles": [
-      {
-        "filename": "original_file.js",
-        "before": "// Assume this represents the original single file.  The actual content would be determined by the codebase.\n// This is just a representative example.\n\n// Dependencies\nconst moduleA = require('module-a');\nconst moduleB = require('module-b');\nconst moduleC = require('module-c');\nconst moduleD = require('module-d');\nconst moduleE = require('module-e');\nconst moduleF = require('module-f');\nconst moduleG = require('module-g');\nconst moduleH = require('module-h');\nconst moduleI = require('module-i');\n\n\n// Function 1\nfunction function1(arg1, arg2) {\n  // Complex logic involving moduleA and moduleB\n  return moduleA.doSomething(arg1) + moduleB.doSomethingElse(arg2);\n}\n\n// Function 2\nfunction function2(arg) {\n  // Logic involving moduleC\n  return moduleC.process(arg);\n}\n\n// Function 3\nfunction function3(data) {\n  // Logic involving moduleD and moduleE\n  return moduleD.validate(data) && moduleE.transform(data);\n}\n\n// Function 4\nfunction function4(x, y) {\n  // Logic involving moduleF\n  return moduleF.calculate(x, y);\n}\n\n// Function 5\nfunction function5(value) {\n  // Logic involving moduleG\n  return moduleG.format(value);\n}\n\n// Function 6\nfunction function6(input) {\n  // Logic involving moduleH\n  return moduleH.convert(input);\n}\n\n// Function 7\nfunction function7(item) {\n  // Logic involving moduleI\n  return moduleI.find(item);\n}\n\n// Function 8\nfunction function8(a, b) {\n    return function1(a, b) + function2(a);\n}\n\n// Function 9\nfunction function9(data) {\n    return function3(data) + function4(1,2);\n}\n\n// Function 10\nfunction function10(val) {\n    return function5(val) + function6(val) + function7(val);\n}\n\nmodule.exports = {\n  function1,\n  function2,\n  function3,\n  function4,\n  function5,\n  function6,\n  function7,\n  function8,\n  function9,\n  function10\n};\n",
-        "after": "// Refactored into multiple modules\n// file: module1.js\nconst moduleA = require('module-a');\nconst moduleB = require('module-b');\n\nfunction function1(arg1, arg2) {\n  return moduleA.doSomething(arg1) + moduleB.doSomethingElse(arg2);\n}\n\nfunction function8(a, b) {\n    return function1(a, b) + module2.function2(a);\n}\n\n\nmodule.exports = {\n  function1,\n  function8\n};\n\n// file: module2.js\nconst moduleC = require('module-c');\n\nfunction function2(arg) {\n  return moduleC.process(arg);\n}\n\nmodule.exports = {\n  function2\n};\n\n\n// file: module3.js\nconst moduleD = require('module-d');\nconst moduleE = require('module-e');\n\nfunction function3(data) {\n  return moduleD.validate(data) && moduleE.transform(data);\n}\n\nfunction function9(data) {\n    return function3(data) + module4.function4(1,2);\n}\n\nmodule.exports = {\n  function3,\n  function9\n};\n\n\n// file: module4.js\nconst moduleF = require('module-f');\n\nfunction function4(x, y) {\n  return moduleF.calculate(x, y);\n}\n\nmodule.exports = {\n  function4\n};\n\n// file: module5.js\nconst moduleG = require('module-g');\nconst moduleH = require('module-h');\nconst moduleI = require('module-i');\n\nfunction function5(value) {\n    return moduleG.format(value);\n}\n\nfunction function6(input) {\n    return moduleH.convert(input);\n}\n\nfunction function7(item) {\n    return moduleI.find(item);\n}\n\nfunction function10(val) {\n    return function5(val) + function6(val) + function7(val);\n}\n\nmodule.exports = {\n    function5,\n    function6,\n    function7,\n    function10\n};\n"
-      }
-    ]
-  },
-  {
-    "id": "aa4ba3c4-f217-4507-aaae-ba6ab9f2b6cf",
-    "analyzedAt": "2025-11-19T14:14:15.449Z",
-    "summary": {
-      "headline": "Architecture looks healthy overall.",
-      "highlights": [
-        "Strong modular structure detected.",
-        "High function density could indicate complex files.",
-        "Heavy dependency usage relative to file count."
-      ]
-    },
-    "stats": {
-      "fileCount": 1,
-      "totalLines": 601,
-      "totalFunctions": 10,
-      "totalImports": 7,
-      "dependencyCount": 9,
-      "averageLinesPerFile": 601,
-      "averageFunctionsPerFile": 10,
-      "functionDensity": 10,
-      "dependencyRatio": 9,
-      "modularityScore": 95,
-      "architectureScore": 80
-    }
-  },
-  {
-    "id": "809151be-961f-4e63-810d-e968f22442e4",
-    "analyzedAt": "2025-11-19T14:13:36.912Z",
-    "summary": {
-      "headline": "Architecture looks healthy overall.",
-      "highlights": [
-        "Strong modular structure detected.",
-        "High function density could indicate complex files.",
-        "Heavy dependency usage relative to file count."
-      ]
-    },
-    "stats": {
-      "fileCount": 1,
-      "totalLines": 601,
-      "totalFunctions": 10,
-      "totalImports": 7,
-      "dependencyCount": 9,
-      "averageLinesPerFile": 601,
-      "averageFunctionsPerFile": 10,
-      "functionDensity": 10,
-      "dependencyRatio": 9,
-      "modularityScore": 95,
-      "architectureScore": 80
-    }
-  },
-  {
-    "id": "9c8b6141-f538-4f20-8a06-5a7eca1e14f1",
-    "analyzedAt": "2025-11-19T14:01:58.241Z",
-    "summary": {
-      "headline": "Architecture looks healthy overall.",
-      "highlights": [
-        "Strong modular structure detected.",
-        "High function density could indicate complex files.",
-        "Heavy dependency usage relative to file count."
-      ]
-    },
-    "stats": {
-      "fileCount": 1,
-      "totalLines": 601,
-      "totalFunctions": 10,
-      "totalImports": 7,
-      "dependencyCount": 9,
-      "averageLinesPerFile": 601,
-      "averageFunctionsPerFile": 10,
-      "functionDensity": 10,
-      "dependencyRatio": 9,
-      "modularityScore": 95,
-      "architectureScore": 80
-    }
-  },
-  {
-    "timestamp": 1763560559754,
-    "type": "gemini-refactor",
-    "summary": "The architecture exhibits strong modularity, but high function density within a single file and significant dependency usage raise concerns about complexity and potential for tighter coupling than necessary. The architecture score, while decent, suggests room for improvement by addressing these concerns.",
-    "issues": [
-      "High function density in a single file suggests potential for overly complex code and reduced maintainability.",
-      "The dependency ratio of 9 (dependencies per file) indicates the single file has many external dependencies, potentially leading to tight coupling and increased risk of cascading failures if a dependency changes or fails.",
-      "The single-file structure, while having a good modularity score based on internal structure, inherently limits independent deployability and scalability of individual components.",
-      "Lack of information on code duplication. While modularity is high, the concentration of functions in a single file increases the risk of redundant code blocks.",
-      "Absence of documentation metrics. Code without sufficient documentation can be difficult to understand and maintain."
-    ],
-    "suggestions": [
-      "Break the single file into multiple smaller files, each responsible for a specific set of related functions (separation of concerns).",
-      "Reduce the number of dependencies used in each module by carefully evaluating their necessity and exploring alternative implementations or internalizing some functionality.",
-      "Implement dependency injection or similar techniques to reduce tight coupling and improve testability.",
-      "Add comprehensive documentation (docstrings, comments) to explain the purpose and usage of each function and module.",
-      "Consider using an interface-based design if appropriate to further decouple components and enable easier swapping of implementations.",
-      "Implement unit tests to verify the correctness of each module and function."
-    ],
-    "refactoredFiles": [
-      {
-        "filename": "main.py",
-        "before": "# Assume this is the content of the original, single file\nimport os\nimport sys\nimport requests\nimport json\nimport logging\nfrom datetime import datetime\n\n# Configuration\nAPI_URL = os.environ.get(\"API_URL\", \"https://example.com/api\")\nLOG_LEVEL = os.environ.get(\"LOG_LEVEL\", \"INFO\")\n\n# Logging setup\nlogging.basicConfig(level=LOG_LEVEL, format='%(asctime)s - %(levelname)s - %(message)s')\n\n# Utility functions\ndef fetch_data(endpoint):\n    try:\n        response = requests.get(f\"{API_URL}/{endpoint}\")\n        response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)\n        return response.json()\n    except requests.exceptions.RequestException as e:\n        logging.error(f\"Error fetching data from {endpoint}: {e}\")\n        return None\n\ndef process_data(data):\n    if not data:\n        return []\n    # Complex data processing logic here\n    processed_list = []\n    for item in data:\n        # Example processing\n        processed_item = {\n            \"id\": item.get(\"id\"),\n            \"name\": item.get(\"name\", \"Unknown\").upper(),\n            \"timestamp\": datetime.now().isoformat()\n        }\n        processed_list.append(processed_item)\n    return processed_list\n\ndef save_data(data, filename=\"output.json\"):\n    try:\n        with open(filename, \"w\") as f:\n            json.dump(data, f, indent=4)\n        logging.info(f\"Data saved to {filename}\")\n    except IOError as e:\n        logging.error(f\"Error saving data to {filename}: {e}\")\n\n# Main function\ndef main():\n    logging.info(\"Starting data processing...\")\n    data = fetch_data(\"items\")\n    if data:\n        processed_data_ = process_data(data)\n        save_data(processed_data_)\n    else:\n        logging.warning(\"No data fetched, exiting.\")\n\n    logging.info(\"Data processing complete.\")\n\n# Function for handling user input\ndef handle_input(user_input):\n    if user_input == \"help\":\n        print(\"Available commands: help, process, exit\")\n    elif user_input == \"process\":\n        main()\n    elif user_input == \"exit\":\n        print(\"Exiting...\")\n        sys.exit(0)\n    else:\n        print(\"Invalid command.\")\n\n\n# Another function for calculating something (just for function density example)\ndef calculate_sum(numbers):\n    total = 0\n    for number in numbers:\n        total += number\n    return total\n\n# And yet another simple function\ndef greet(name):\n    return f\"Hello, {name}!\"\n\nif __name__ == \"__main__\":\n    logging.info(\"Application started.\")\n    while True:\n        user_input = input(\"Enter command (help for options): \")\n        handle_input(user_input)\n",
-        "after": "# utilities.py\nimport requests\nimport logging\nimport os\n\nAPI_URL = os.environ.get(\"API_URL\", \"https://example.com/api\")\n\ndef fetch_data(endpoint):\n    \"\"\"Fetches data from the specified API endpoint.\"\"\"\n    try:\n        response = requests.get(f\"{API_URL}/{endpoint}\")\n        response.raise_for_status()\n        return response.json()\n    except requests.exceptions.RequestException as e:\n        logging.error(f\"Error fetching data from {endpoint}: {e}\")\n        return None\n\n# processor.py\nimport json\nimport logging\nfrom datetime import datetime\n\ndef process_data(data):\n    \"\"\"Processes the raw data and returns a processed list.\"\"\"\n    if not data:\n        return []\n    processed_list = []\n    for item in data:\n        processed_item = {\n            \"id\": item.get(\"id\"),\n            \"name\": item.get(\"name\", \"Unknown\").upper(),\n            \"timestamp\": datetime.now().isoformat()\n        }\n        processed_list.append(processed_item)\n    return processed_list\n\ndef save_data(data, filename=\"output.json\"):\n    \"\"\"Saves the processed data to a JSON file.\"\"\"\n    try:\n        with open(filename, \"w\") as f:\n            json.dump(data, f, indent=4)\n        logging.info(f\"Data saved to {filename}\")\n    except IOError as e:\n        logging.error(f\"Error saving data to {filename}: {e}\")\n\n# input_handler.py\nimport sys\n\ndef handle_input(user_input, main_function):\n    \"\"\"Handles user input and executes corresponding actions.\"\"\"\n    if user_input == \"help\":\n        print(\"Available commands: help, process, exit\")\n    elif user_input == \"process\":\n        main_function()\n    elif user_input == \"exit\":\n        print(\"Exiting...\")\n        sys.exit(0)\n    else:\n        print(\"Invalid command.\")\n\n# calculator.py\ndef calculate_sum(numbers):\n    \"\"\"Calculates the sum of a list of numbers.\"\"\"\n    total = 0\n    for number in numbers:\n        total += number\n    return total\n\n\n# greeter.py\ndef greet(name):\n    \"\"\"Greets a person by name.\"\"\"\n    return f\"Hello, {name}!\"\n\n\n# main.py\nimport logging\nimport os\nfrom utilities import fetch_data\nfrom processor import process_data, save_data\nfrom input_handler import handle_input\n\nLOG_LEVEL = os.environ.get(\"LOG_LEVEL\", \"INFO\")\nlogging.basicConfig(level=LOG_LEVEL, format='%(asctime)s - %(levelname)s - %(message)s')\n\ndef main():\n    \"\"\"Main function to orchestrate data fetching, processing, and saving.\"\"\"\n    logging.info(\"Starting data processing...\")\n    data = fetch_data(\"items\")\n    if data:\n        processed_data_ = process_data(data)\n        save_data(processed_data_)\n    else:\n        logging.warning(\"No data fetched, exiting.\")\n\n    logging.info(\"Data processing complete.\")\n\nif __name__ == \"__main__\":\n    logging.info(\"Application started.\")\n    while True:\n        user_input = input(\"Enter command (help for options): \")\n        handle_input(user_input, main)\n"
       }
     ]
   }

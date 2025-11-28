@@ -24,7 +24,11 @@ const app = express();
 app.locals.projects = {}; // in-memory map projectId -> { path, scan }
 
 // allow larger JSON payloads (used by analyze/refactor endpoints)
-app.use(cors());
+app.use(cors({
+  origin: 'https://refyne-ai.vercel.app',
+  methods: ['GET','POST','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization']
+}));
 app.use(express.json({ limit: '200mb' }));
 app.use(express.urlencoded({ extended: true, limit: '200mb' }));
 

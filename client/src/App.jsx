@@ -21,9 +21,11 @@ const App = () => {
   const [refactorResult, setRefactorResult] = useState(null);
   const [currentPage, setCurrentPage] = useState('upload');
 
+  const API_BASE = import.meta.env.VITE_API_BASE;
+
   const loadHistory = useCallback(async () => {
     try {
-      const response = await axios.get('/api/history');
+      const response = await axios.get(`${API_BASE}/history`);
       setHistory(response.data.history || []);
     } catch (err) {
       console.error('Failed to load history', err);
@@ -42,7 +44,7 @@ const App = () => {
       const formData = new FormData();
       formData.append("project", file);
 
-      const uploadResponse = await axios.post("/api/upload", formData, {
+      const uploadResponse = await axios.post(`${API_BASE}/upload`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
         maxBodyLength: Infinity,
         maxContentLength: Infinity
@@ -51,7 +53,7 @@ const App = () => {
       const { projectId, scan: initialScan } = uploadResponse.data;
       setScan(initialScan);
 
-      const analyzeResponse = await axios.post('/api/analyze', { projectId });
+      const analyzeResponse = await axios.post(`${API_BASE}/analyze`, { projectId });
       setAnalysis(analyzeResponse.data.analysis);
       setScan(analyzeResponse.data.scan);
 
@@ -68,7 +70,7 @@ const App = () => {
   const handleRefactor = async () => {
     try {
       setRefactorLoading(true);
-      const res = await axios.post('/api/refactor');
+      const res = await axios.post(`${API_BASE}/refactor`);
       setRefactorResult(res.data?.data ?? null);
       setCurrentPage('output'); // Auto-navigate to output after refactor
     } catch (err) {
@@ -81,7 +83,7 @@ const App = () => {
   // In App.jsx - add handleGenerateRecommendations function
 const handleGenerateRecommendations = async () => {
   try {
-    const res = await axios.post('/api/recommendations', { analysis });
+    const res = await axios.post(`${API_BASE}/recommendations`, { analysis });
     return res.data; // Return the API response
   } catch (err) {
     console.error('Generate recommendations failed', err);

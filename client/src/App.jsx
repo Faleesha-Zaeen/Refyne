@@ -25,7 +25,7 @@ const App = () => {
 
   const loadHistory = useCallback(async () => {
     try {
-      const response = await axios.get(`${API_BASE}/history`);
+      const response = await axios.get(`${API_BASE}/api/history`);
       setHistory(response.data.history || []);
     } catch (err) {
       console.error('Failed to load history', err);
@@ -44,7 +44,7 @@ const App = () => {
       const formData = new FormData();
       formData.append("project", file);
 
-      const uploadResponse = await axios.post(`${API_BASE}/upload`, formData, {
+      const uploadResponse = await axios.post(`${API_BASE}/api/upload`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
         maxBodyLength: Infinity,
         maxContentLength: Infinity
@@ -53,7 +53,7 @@ const App = () => {
       const { projectId, scan: initialScan } = uploadResponse.data;
       setScan(initialScan);
 
-      const analyzeResponse = await axios.post(`${API_BASE}/analyze`, { projectId });
+      const analyzeResponse = await axios.post(`${API_BASE}/api/analyze`, { projectId });
       setAnalysis(analyzeResponse.data.analysis);
       setScan(analyzeResponse.data.scan);
 
@@ -70,7 +70,7 @@ const App = () => {
   const handleRefactor = async () => {
     try {
       setRefactorLoading(true);
-      const res = await axios.post(`${API_BASE}/refactor`);
+      const res = await axios.post(`${API_BASE}/api/refactor`);
       setRefactorResult(res.data?.data ?? null);
       setCurrentPage('output'); // Auto-navigate to output after refactor
     } catch (err) {
@@ -83,7 +83,7 @@ const App = () => {
   // In App.jsx - add handleGenerateRecommendations function
 const handleGenerateRecommendations = async () => {
   try {
-    const res = await axios.post(`${API_BASE}/recommendations`, { analysis });
+    const res = await axios.post(`${API_BASE}/api/recommendations`, { analysis });
     return res.data; // Return the API response
   } catch (err) {
     console.error('Generate recommendations failed', err);

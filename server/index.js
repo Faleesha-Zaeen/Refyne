@@ -86,7 +86,7 @@ const extractZipTo = async (zipPath, destDir) => {
 };
 
 // Upload route: accepts single field 'project' (zip file), extracts into uploads/tmp/<projectId>
-app.post(`${API_BASE}/upload`, upload.single('project'), async (req, res) => {
+app.post('/api/upload', upload.single('project'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No project archive received.' });
   }
@@ -117,7 +117,7 @@ app.post(`${API_BASE}/upload`, upload.single('project'), async (req, res) => {
 });
 
 // Recommendations route: AI-powered code improvement suggestions
-app.post(`${API_BASE}/recommendations`, async (req, res) => {
+app.post('/api/recommendations', async (req, res) => {
   const { analysis } = req.body;
 
   if (!analysis) {
@@ -432,7 +432,7 @@ function normalizeRecommendations(aiPayload, analysis) {
 }
 
 // Optional: Add route to apply specific recommendations
-app.post(`${API_BASE}/apply-recommendation`, async (req, res) => {
+app.post('/api/apply-recommendation', async (req, res) => {
   const { recommendation, analysis } = req.body;
   
   if (!recommendation || !analysis) {
@@ -468,7 +468,7 @@ app.post(`${API_BASE}/apply-recommendation`, async (req, res) => {
 });
 
 // Analyze route: expects { projectId } in body
-app.post(`${API_BASE}/analyze`, async (req, res) => {
+app.post('/api/analyze', async (req, res) => {
   const { projectId } = req.body || {};
   if (!projectId || !app.locals.projects[projectId]) {
     return res.status(400).json({ error: 'Unknown project. Upload a project before analyzing.' });
@@ -499,7 +499,7 @@ app.post(`${API_BASE}/analyze`, async (req, res) => {
 });
 
 // Refactor route: uses Gemini flash-preferring candidate list to request refactor guidance
-app.post(`${API_BASE}/refactor`, async (_req, res) => {
+app.post('/api/refactor', async (_req, res) => {
   try {
     const historyEntries = await loadHistory();
     if (!historyEntries.length) {
@@ -637,7 +637,7 @@ Return your response strictly as a JSON object:
 });
 
 // History endpoint
-app.get(`${API_BASE}/history`, async (_req, res) => {
+app.get('/api/history', async (_req, res) => {
   try {
     const historyEntries = await loadHistory();
     return res.status(200).json({ history: historyEntries });
